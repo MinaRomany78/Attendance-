@@ -17,13 +17,14 @@ public class AttendanceEvent : BaseEntity
 
     public int? ShiftId { get; set; }
     public Shift? Shift { get; set; }
-    public AttendanceEventType!EventType { get; set; }
+
+    public AttendanceEventType EventType { get; set; }
     public DateTime EventTime { get; set; }
 
     public ClassificationStatus ClassificationStatus { get; set; }
     public ClassificationSource ClassificationSource { get; set; }
 
-    /// <summary>غر٩ الثقة 0..1 عند التصنيف الآلي.</summary>
+    /// <summary>درجة الثقة 0..1 عند التصنيف الآلي.</summary>
     public decimal? Confidence { get; set; }
 
     public bool IsManual { get; set; }
