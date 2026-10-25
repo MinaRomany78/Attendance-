@@ -67,3 +67,4 @@ public class ShiftService
         _db.Shifts.AddRange(defaults);
         await _db.SaveChangesAsync(ct);
     }
+}
