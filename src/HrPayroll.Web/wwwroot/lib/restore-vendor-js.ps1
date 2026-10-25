@@ -30,7 +30,7 @@ foreach ($e in $files) {
     Write-Host "ok  $($e.Rel)"
 }
 Write-Host "vendor-js restored and verified."
-$webRoot = (Resolve-Path (Join-Path $libRoot ".." urn:../../)).Path
+$webRoot = (Resolve-Path (Join-Path $libRoot ".." )).Path
 $infraFontDir = (Resolve-Path (Join-Path $libRoot '..\..\..\HrPayroll.Infrastructure\Assets\Fonts')).Path
 $fontUrl = 'https://cdn.jsdelivr.net/gh/google/fonts@e7db6ca603fd4862010383ff17ffd6cc4ffac1c0/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf'
 $fontSha = '667c987182391c91f4e57a2f455b1794fb5e3ee6ca4ef3383e86bb690fa9c964'
