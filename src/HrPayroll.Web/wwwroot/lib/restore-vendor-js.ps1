@@ -30,4 +30,3 @@ foreach ($e in $files) {
     Write-Host "ok  $($e.Rel)"
 }
 Write-Host "vendor-js restored and verified."
-$webRoot = (Resolve-Path (Join-Path $libRoot ".." urn:../../)).Path
