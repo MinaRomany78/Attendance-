@@ -18,7 +18,6 @@ public class AttendanceCorrection : BaseEntity
 
     /// <summary>اسم الحقل المصحح (CheckInTime / CheckOutTime / Status / الأوقات ... إلخ).</summary>
     public string FieldName { get; set; } = string.Empty;
-
     public string? OldValue { get; set; }
     public string? NewValue { get; set; }
 
