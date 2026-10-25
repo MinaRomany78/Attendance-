@@ -5,7 +5,6 @@ obj/
 .vscode/
 *.db
 *.db-shm
-*.db-shm
 *.db-wal
 appsettings.Production.json
 
@@ -18,3 +17,9 @@ publish/
 
 # ملفات سجلات وقت التشغيل
 *.log
+
+# Third-party client libraries: restored via src/HrPayroll.Web/wwwroot/lib/restore-lib.ps1
+src/HrPayroll.Web/wwwroot/lib/bootstrap/
+src/HrPayroll.Web/wwwroot/lib/jquery/
+src/HrPayroll.Web/wwwroot/lib/jquery-validation/
+src/HrPayroll.Web/wwwroot/lib/jquery-validation-unobtrusive/
