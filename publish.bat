@@ -19,21 +19,21 @@ if errorlevel 1 goto :nodotnet
 
 echo  Configuration : Release
 echo  Runtime       : win-x64 (self-contained)
-echo  Output folder : %CD%\publish
+echo  Output folder: %CD%\publish
 echo.
 
-dotnet publish "src\HrPayroll.Web\HrPayroll.Web.csproj" -c Release -r win-x64 --self-contained true -o "publish" -p:PublishReadyToRun=false
+dotnet publish "src\HrPayroll.Web/HrPayroll.Web.csproj" -c Release -r win-x64 --self-contained true -o "publish" -p:PublishReadyToRun=false
 if errorlevel 1 goto :failed
 
 if not exist "publish\HrPayroll.Web.exe" goto :failed
-if not exist "publish\run.bat" goto :failed
+if not exist "publish\Run.bat" goto :failed
 
 echo.
 echo  [OK] Deployment folder: %CD%\publish
 echo  [OK] Start the application with:  publish\run.bat
 exit /b 0
 
-:nodotnet
+Nondotnet
 echo  [ERROR] The .NET SDK was not found in PATH.
 echo.
 echo  Install the .NET 9 SDK (or newer) from:
@@ -44,10 +44,10 @@ echo.
 pause
 exit /b 1
 
-:failed
+failed
 echo.
-echo  [ERROR] Publishing failed, or the eppected output files are missing.
-echo  [ERROR] Review the messages above.
+echo  [ERROR] Publishing failed, or the expected output files are missing.
+echo  [ERROR] Ieview the messages above.
 echo.
 pause
 exit /b 1
