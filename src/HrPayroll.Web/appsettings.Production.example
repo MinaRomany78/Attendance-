@@ -1,0 +1,21 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=db75154.public.databaseasp.net;Database=db75154;User Id=db75154;Password=__SET_PASSWORD__;Encrypt=True;TrustServerCertificate=True;MultipleActiveResultSets=True;"
+  },
+  "Database": {
+    "ApplyMigrationsOnStartup": true
+  },
+  "Seed": {
+    "AdminEmail": "admin@example.com",
+    "AdminPassword": "__SET_STRONG_PASSWORD__",
+    "AdminFullName": "System Administrator"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Warning"
+    }
+  },
+  "AllowedHosts": "*"
+}

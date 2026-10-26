@@ -1,4 +1,4 @@
-using HrPayroll.Domain.ValueObjects;
+using HrPayroll.Domain.Entities;
 
 namespace HrPayroll.Domain.ValueObjects;
 
