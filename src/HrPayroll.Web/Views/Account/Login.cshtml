@@ -1,74 +1,29 @@
-@model LoginViewModel
-@{
-    ViewData["Title"] = "تسجيل الدخول";
-    Layout = "_AuthLayout";
-    var showDemoHint = ViewData["ShowDemoHint"] as bool? == true;
-    var hasGlobalError = !ViewData.ModelState.IsValid
-                         && ViewData.ModelState[string.Empty]?.Errors.Count > 0;
-}
-<div class="login-card">
-    <div class="login-logo" aria-hidden="true">HR</div>
-    <div class="login-app">نظام الحضور والموارد البشرية</div>
-    <h1>تسجيل الدخول</h1>
-    @if (showDemoHint)
-    {
-        var demoEmail = ViewData["DemoAdminEmail"] as string;
-        <div class="auth-demo-hint" role="note">
-            <strong>بيئة تطوير محلية</strong>
-            @if (!string.IsNullOrWhiteSpace(demoEmail))
-            {
-                <span>
-                    حساب تجريبي: <span dir="ltr">@demoEmail</span> — كلمة المرور تُضبط في إعدادات التطوير المحلية
-                    (<span dir="ltr">Seed:AdminPassword</span>) أو تُطبع مرة واحدة في سجل بدء التشغيل عند أول إنشاء.
-                    لا تُنشأ أي بيانات اعتماد افتراضية في بيئة الإنتاج.
-                </span>
-            }
-            else
-            {
-                <span>لم يُضبط حساب تجريبي بعد. راجع سجل بدء التشغيل لمعرفة كيفية إنشاء أول مسؤول.</span>
-            }
+@model HrPayroll.Web.ViewModels.LoginVm
+@{ Layout = "_AuthLayout"; ViewData["Title"] = "تسجيل الدخول"; }
+<div class="auth-card">
+    <div class="text-center mb-4">
+        <div class="auth-logo">HR</div>
+        <h3>نظام الحضور والمرتبات</h3>
+        <p class="text-muted">سجّل الدخول للمتابعة</p>
+    </div>
+    <form asp-action="Login" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="ReturnUrl" />
+        <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+        <div class="mb-3">
+            <label asp-for="UserName" class="form-label">اسم المستخدم</label>
+            <input asp-for="UserName" class="form-control" autocomplete="username" />
+            <span asp-validation-for="UserName" class="text-danger"></span>
         </div>
-    }
-    <form asp-action="Login" method="post" class="auth-form" autocomplete="on" novalidate>
-        <input type="hidden" name="returnUrl" value="@ViewData["ReturnUrl"]" />
-        @if (hasGlobalError)
-        {
-            <div class="auth-alert" role="alert">
-                <span class="auth-alert-ico">⚠️</span>
-                <div asp-validation-summary="ModelOnly"></div>
-            </div>
-        }
-        <div class="auth-field">
-            <label asp-for="Email"></label>
-            <span class="auth-input">
-                <span class="auth-input-ico" aria-hidden="true">✉️</span>
-                <input asp-for="Email" class="auth-control" placeholder="name@company.com"
-                       autocomplete="username" inputmode="email" dir="ltr" autofocus />
-            </span>
-            <span asp-validation-for="Email" class="field-error"></span>
+        <div class="mb-3">
+            <label asp-for="Password" class="form-label">كلمة المرور</label>
+            <input asp-for="Password" class="form-control" autocomplete="current-password" />
+            <span asp-validation-for="Password" class="text-danger"></span>
         </div>
-        <div class="auth-field">
-            <label asp-for="Password"></label>
-            <span class="auth-input">
-                <span class="auth-input-ico" aria-hidden="true">🔒</span>
-                <input asp-for="Password" class="auth-control" placeholder="••••••••"
-                       autocomplete="current-password" dir="ltr" />
-                <button type="button" class="pw-toggle" data-pw-toggle="Password"
-                        aria-label="إظهار كلمة المرور" aria-pressed="false" title="إظهار كلمة المرور">
-                    <span class="pw-toggle-ico" aria-hidden="true">👁️</span>
-                </button>
-            </span>
-            <span asp-validation-for="Password" class="field-error"></span>
+        <div class="form-check mb-3">
+            <input asp-for="RememberMe" class="form-check-input" />
+            <label asp-for="RememberMe" class="form-check-label">تذكرني</label>
         </div>
-        <div class="auth-row">
-            <label class="switch auth-remember">
-                <input asp-for="RememberMe" />
-                <span>تذكرني على هذا الجهاز</span>
-            </label>
-        </div>
-        <button type="submit" class="btn btn-primary auth-submit" id="loginSubmit">
-            <span class="auth-submit-txt">دخول</span>
-        </button>
+        <button type="submit" class="btn btn-primary w-100">دخول</button>
     </form>
 </div>
-@section Scripts { <partial name="_ValidationScriptsPartial" /> }
