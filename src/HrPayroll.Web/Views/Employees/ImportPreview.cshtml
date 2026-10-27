@@ -20,6 +20,7 @@
                 <span>⚠️ نفس الملف استُورد من قبل. @a.PreviousImportSummary لن يتم تكرار الموظفين — سيُعرضون كـ "موجود بنفس البيانات".</span>
             </div>
         }
+
         <div class="stat-grid">
             <div class="stat"><div class="label">إجمالي الصفوف</div><div class="value">@a.Total</div></div>
             <div class="stat ok"><div class="label">موظفون جدد</div><div class="value">@a.NewCount</div></div>
@@ -28,6 +29,7 @@
             <div class="stat bad"><div class="label">مكرر</div><div class="value">@a.DuplicateCount</div></div>
             <div class="stat bad"><div class="label">غير صالح</div><div class="value">@a.InvalidCount</div></div>
         </div>
+
         <div class="section-title">خريطة الأعمدة المكتشفة وربطها بحقول النظام</div>
         <div class="table-wrap">
             <table class="data">
@@ -46,6 +48,7 @@
                 </tbody>
             </table>
         </div>
+
         <form method="post" asp-action="ImportConfirm" style="margin-top:18px">
             <input type="hidden" name="token" value="@Model.Token" />
             <input type="hidden" name="fileName" value="@Model.FileName" />
@@ -68,6 +71,7 @@
         </form>
     </div>
 </div>
+
 <div class="card">
     <div class="card-head">
         <h3>تفاصيل الصفوف والتحقق</h3>
@@ -120,6 +124,7 @@
         </table>
     </div>
 </div>
+
 @functions {
     private static string FieldName(EmployeeField f) => f switch
     {
@@ -139,3 +144,4 @@
         EmployeeField.Notes => "ملاحظات",
         _ => f.ToString()
     };
+}

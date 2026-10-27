@@ -13,6 +13,7 @@
         <form method="post" asp-action="@(isEdit ? "Edit" : "Create")" asp-route-id="@(isEdit ? Model.Id : (int?)null)">
             <input type="hidden" asp-for="Id" />
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" style="display:@(ViewData.ModelState.ErrorCount > 0 ? "flex" : "none")"></div>
+
             <div class="section-title">البيانات الأساسية</div>
             <div class="form-grid">
                 <div class="field">
@@ -44,6 +45,7 @@
                     </select>
                 </div>
             </div>
+
             <div class="section-title">الأجر وساعات العمل</div>
             <div class="form-grid">
                 <div class="field">
@@ -67,6 +69,7 @@
                     <span asp-validation-for="HireDate" class="field-error"></span>
                 </div>
             </div>
+
             <div class="section-title">الإجازات والحالة الوظيفية</div>
             <div class="form-grid">
                 <div class="field">
@@ -103,6 +106,7 @@
                     <span class="hint">اختيارية: النظام يكتشف الوردية الفعلية من البصمات إذا لم تُحدد.</span>
                 </div>
             </div>
+
             <div class="section-title">بيانات التواصل</div>
             <div class="form-grid">
                 <div class="field">
@@ -123,6 +127,7 @@
                     <textarea asp-for="Notes" rows="2"></textarea>
                 </div>
             </div>
+
             <div class="btn-row" style="margin-top:20px">
                 <button type="submit" class="btn btn-primary btn-lg">@(isEdit ? "حفظ التعديلات" : "إضافة الموظف")</button>
                 <a class="btn btn-ghost btn-lg" asp-action="Index">إلغاء</a>
@@ -130,6 +135,7 @@
         </form>
     </div>
 </div>
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
