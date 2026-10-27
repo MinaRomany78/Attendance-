@@ -102,8 +102,8 @@ public enum LeaveType
 public enum EmploymentStatus
 {
     Active = 0,      // على العمل
-    OnLeave = 1,    // في إجازة طويلة
-    Suspended = 2,  // موقوف
+    OnLeave = 1,     // في إجازة طويلة
+    Suspended = 2,   // موقوف
     Terminated = 3   // منتهي الخدمة
 }
 
