@@ -158,3 +158,4 @@ public class ClassificationTests
 
         Assert.Equal(workDate, resolved);
     }
+}

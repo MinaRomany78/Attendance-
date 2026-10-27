@@ -173,3 +173,4 @@ public class LeaveServiceTests
         var daily = await ctx.DailyAttendances.SingleAsync();
         Assert.Equal(AttendanceStatus.UnpaidLeave, daily.Status);
     }
+}
