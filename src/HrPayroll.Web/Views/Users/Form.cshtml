@@ -14,6 +14,7 @@
         <form method="post" asp-action="Create">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger"
                  style="display:@(ViewData.ModelState.ErrorCount > 0 ? "flex" : "none")"></div>
+
             <div class="form-grid">
                 <div class="field">
                     <label asp-for="FullName"></label>
@@ -45,6 +46,7 @@
                     </label>
                 </div>
             </div>
+
             <div class="btn-row" style="margin-top:20px">
                 <button type="submit" class="btn btn-primary btn-lg">إنشاء المستخدم</button>
                 <a class="btn btn-ghost btn-lg" asp-action="Index">إلغاء</a>
@@ -52,4 +54,5 @@
         </form>
     </div>
 </div>
+
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }
