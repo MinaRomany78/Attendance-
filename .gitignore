@@ -23,3 +23,9 @@ src/HrPayroll.Web/wwwroot/lib/bootstrap/
 src/HrPayroll.Web/wwwroot/lib/jquery/
 src/HrPayroll.Web/wwwroot/lib/jquery-validation/
 src/HrPayroll.Web/wwwroot/lib/jquery-validation-unobtrusive/
+
+# Cairo font binaries (600KB each): restored via
+# src/HrPayroll.Web/wwwroot/lib/restore-font.ps1 (pinned google/fonts commit, SHA256-verified)
+# Covers both the web font and the PDF-embedded copy.
+src/HrPayroll.Web/wwwroot/fonts/Cairo.ttf
+src/HrPayroll.Infrastructure/Assets/Fonts/Cairo.ttf
