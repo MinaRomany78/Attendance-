@@ -238,3 +238,4 @@ public class CalculationTests
         Assert.Equal(45, p.RoundOvertimeMinutes(59));
         Assert.Equal(60, p.RoundOvertimeMinutes(60));
     }
+}
