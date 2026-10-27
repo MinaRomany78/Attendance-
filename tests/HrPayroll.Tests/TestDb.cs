@@ -98,3 +98,4 @@ public sealed class TestDb : IDisposable
     public static readonly DateTime Sunday = new(2024, 10, 6);
     public static readonly DateTime Monday = new(2024, 10, 7);
     public static readonly DateTime Friday = new(2024, 10, 11);
+}
