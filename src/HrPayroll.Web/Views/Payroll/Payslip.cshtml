@@ -26,6 +26,7 @@
             <div class="def"><div class="k">أجر الساعة (الأجر اليومي ÷ 8)</div><div class="v">@i.HourlyRate.ToString("N2")</div></div>
             <div class="def"><div class="k">معامل الإضافي</div><div class="v">1 (بدون مضاعفة)</div></div>
         </div>
+
         <div class="section-title">الحضور</div>
         <div class="def-grid">
             <div class="def"><div class="k">أيام الحضور</div><div class="v">@i.AttendanceDays</div></div>
@@ -35,6 +36,7 @@
             <div class="def"><div class="k">أيام غياب</div><div class="v">@i.AbsenceDays</div></div>
             <div class="def"><div class="k">دقائق التأخير</div><div class="v">@i.LateMinutes</div></div>
         </div>
+
         <div class="section-title">الإضافي</div>
         <div class="def-grid">
             <div class="def"><div class="k">إضافي خام (ساعة)</div><div class="v">@i.RawOvertimeHours</div></div>
@@ -42,6 +44,7 @@
             <div class="def"><div class="k">إضافي مدفوع (ساعة)</div><div class="v">@i.PaidOvertimeHours</div></div>
             <div class="def"><div class="k">قيمة الإضافي</div><div class="v">@i.OvertimeAmount.ToString("N2") @Model.Currency</div></div>
         </div>
+
         <div class="section-title">الاستحقاقات</div>
         <div class="table-wrap">
             <table class="data">
@@ -55,6 +58,7 @@
                 </tbody>
             </table>
         </div>
+
         <div class="section-title">الخصومات</div>
         <div class="table-wrap">
             <table class="data">
@@ -69,10 +73,12 @@
                 </tbody>
             </table>
         </div>
+
         <div style="margin-top:16px;background:#e8f7ee;border:1px solid #c7ead6;border-radius:10px;padding:14px;display:flex;justify-content:space-between;align-items:center">
             <strong style="font-size:15px">صافي الراتب المستحق</strong>
             <strong style="font-size:20px">@i.NetSalary.ToString("N2") @Model.Currency</strong>
         </div>
+
         @if (Model.Notes.Count > 0)
         {
             <div class="section-title">ملاحظات الحساب</div>
@@ -83,6 +89,7 @@
                 }
             </ul>
         }
+
         <div class="section-title">تفاصيل الحساب التقنية (JSON)</div>
         <details>
             <summary class="hint">عرض تفاصيل الحساب خطوة بخطوة لأغراض التدقيق</summary>

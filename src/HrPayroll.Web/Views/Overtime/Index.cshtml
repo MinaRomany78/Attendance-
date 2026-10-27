@@ -78,12 +78,14 @@
         </form>
     </div>
 </div>
+
 <div class="stat-grid">
     <div class="stat"><div class="label">📋 عدد الأيام</div><div class="value">@Model.Rows.Count</div></div>
     <div class="stat"><div class="label">⏱️ إضافي خام</div><div class="value">@Model.TotalRawHours <small>ساعة</small></div><div class="hint">@Model.TotalRawMinutes دقيقة</div></div>
     <div class="stat ok"><div class="label">✅ إضافي معتمد</div><div class="value">@Model.TotalApprovedHours <small>ساعة</small></div><div class="hint">@Model.TotalApprovedMinutes دقيقة</div></div>
     <div class="stat warn"><div class="label">⏳ بانتظار الاعتماد</div><div class="value">@Model.PendingCount</div><div class="hint">يوم بها إضافي خام غير معتمد</div></div>
 </div>
+
 <div class="card">
     <div class="card-head">
         <h3>الأيام</h3>
