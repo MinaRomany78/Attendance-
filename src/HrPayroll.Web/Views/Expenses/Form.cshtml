@@ -1,0 +1,72 @@
+@model EmployeeExpense
+@using HrPayroll.Domain.Entities
+@using HrPayroll.Domain.Enums
+@{
+    var isEdit = Model.Id > 0;
+    ViewData["Title"] = isEdit ? "تعديل مصروف" : "تسجيل مصروف";
+}
+<partial name="_BackHome" />
+<div class="card">
+    <div class="card-head">
+        <div>
+            <h2>@ViewData["Title"]</h2>
+            <div class="sub">المصروف القابل للخصم المعتمد يُسوَّى مع كشف نفس الشهر مرة واحدة. المشمول ضمن سلفة لا يُخصم مرة أخرى.</div>
+        </div>
+        <a class="btn btn-ghost btn-sm" asp-action="Index">رجوع للقائمة</a>
+    </div>
+    <div class="card-body">
+        <form method="post" asp-action="@(isEdit ? "Edit" : "Create")" asp-route-id="@Model.Id">
+            <input type="hidden" asp-for="Id" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" style="display:@(ViewData.ModelState.ErrorCount > 0 ? "flex" : "none")"></div>
+            <div class="form-grid">
+                <div class="field span-2">
+                    <label asp-for="EmployeeId">الموظف</label>
+                    <select asp-for="EmployeeId" asp-items="ViewBag.Employees"><option value="">— اختر الموظف —</option></select>
+                    <span asp-validation-for="EmployeeId" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Amount">المبلغ (EGP)</label>
+                    <input asp-for="Amount" type="number" step="0.01" min="0" />
+                    <span asp-validation-for="Amount" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="ExpenseDate">تاريخ المصروف</label>
+                    <input asp-for="ExpenseDate" type="date" />
+                    <span asp-validation-for="ExpenseDate" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Category">الفئة</label>
+                    <input asp-for="Category" placeholder="مواصلات / علاج / ..." />
+                    <span asp-validation-for="Category" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="ReceiptReference">مرجع الإيصال</label>
+                    <input asp-for="ReceiptReference" />
+                </div>
+                <div class="field span-2">
+                    <label asp-for="SettlementMode">طريقة التسوية</label>
+                    <select asp-for="SettlementMode" asp-items="Html.GetEnumSelectList<ExpenseSettlementMode>()"></select>
+                    <span class="hint">«مشمول ضمن سلفة» يتطلب اختيار السلفة أدناه ولا يُخصم من الراتب مرة أخرى.</span>
+                </div>
+                <div class="field span-2">
+                    <label asp-for="SalaryAdvanceId">السلفة المرتبطة (عند الشمول فقط)</label>
+                    <select asp-for="SalaryAdvanceId" asp-items="ViewBag.Advances"><option value="">— بدون ربط —</option></select>
+                    <span asp-validation-for="SalaryAdvanceId" class="field-error"></span>
+                </div>
+                <div class="field span-2">
+                    <label asp-for="Description">الوصف / السبب</label>
+                    <textarea asp-for="Description" rows="2"></textarea>
+                </div>
+                <div class="field span-2">
+                    <label asp-for="Notes">ملاحظات</label>
+                    <textarea asp-for="Notes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="btn-row" style="margin-top:20px">
+                <button type="submit" class="btn btn-primary btn-lg">@(isEdit ? "حفظ التعديلات" : "تسجيل المصروف")</button>
+                <a class="btn btn-ghost btn-lg" asp-action="Index">إلغاء</a>
+            </div>
+        </form>
+    </div>
+</div>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }
