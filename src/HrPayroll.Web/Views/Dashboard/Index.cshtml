@@ -12,6 +12,7 @@
     var isAcct = isAdmin || User.IsInRole(AppRoles.Accountant);
     var dayStr = Model.StatDate.ToString("yyyy-MM-dd");
     var dayName = Model.StatDate.ToString("dddd");
+
     string nsTitle, nsDesc, nsUrl, nsBtn;
     if (Model.ActiveEmployees == 0)
     {
@@ -56,6 +57,7 @@
         nsUrl = Url.Action("Index", "Payroll", new { month = Model.Month, year = Model.Year })!; nsBtn = "مراجعة كشف المرتبات";
     }
 }
+
 <section class="home-welcome">
     <div class="home-welcome-body">
         <h1>أهلًا، @displayName</h1>
@@ -66,6 +68,7 @@
         <button type="submit" class="btn btn-ghost btn-sm">عرض</button>
     </form>
 </section>
+
 @if (isHr)
 {
     <nav class="launcher" aria-label="وحدات الموارد البشرية والحضور">
@@ -116,6 +119,7 @@
         </a>
     </nav>
 }
+
 @if (isAcct)
 {
     <nav class="launcher" aria-label="وحدات الرواتب">
@@ -140,7 +144,7 @@
             <span class="mod-desc">الخصومات والجزاءات</span>
         </a>
         <a class="mod" asp-controller="SalaryAdvances" asp-action="Index">
-            <span class="mod-ico" style="--mod:#0d9488"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 7.5V12l3 2" /></svg></span>
+            <span class="mod-ico" style="--mod:#0d9488"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 7.5V12l3 2" /></svg></span>
             <span class="mod-title">سلفة يوم 15</span>
             <span class="mod-desc">حساب واعتماد سلف منتصف الشهر</span>
         </a>
@@ -151,9 +155,10 @@
         </a>
     </nav>
 }
+
 <nav class="launcher" aria-label="التقارير والإدارة">
     <a class="mod" asp-controller="Reports" asp-action="Index">
-        <span class="mod-ico" style="--mod:#334155"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V4" /><path d="M4 20h16" /><path d="M8.5 16v-5M13 16V7.5M17.5 16v-3" /></svg></span>
+        <span class="mod-ico" style="--mod:#334155"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V4" /><path d="M4 20h16" /><path d="M8.5 16v-5M13 16V7.5M17.5 16v-3" /></svg></span>
         <span class="mod-title">التقارير</span>
         <span class="mod-desc">التقارير اليومية والشهرية والتصدير</span>
     </a>
@@ -171,6 +176,7 @@
         </a>
     }
 </nav>
+
 <div class="home-stats" aria-label="ملخص سريع">
     <a class="home-stat" asp-controller="Employees" asp-action="Index">
         <span class="k">إجمالي الموظفين</span><span class="v">@Model.ActiveEmployees</span>
@@ -182,6 +188,7 @@
         <span class="k">الغياب اليوم</span><span class="v">@Model.Absent</span>
     </a>
 </div>
+
 <div class="next-step">
     <div class="next-step-body">
         <div class="next-step-k">الخطوة التالية</div>
