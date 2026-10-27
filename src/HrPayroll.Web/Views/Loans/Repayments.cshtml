@@ -1,0 +1,79 @@
+@model Loan
+@using HrPayroll.Domain.Entities
+@using HrPayroll.Domain.Enums
+@{
+    ViewData["Title"] = "أقساط القرض";
+    var rows = (ViewBag.Repayments as List<LoanRepayment>) ?? new List<LoanRepayment>();
+    string RText(LoanRepaymentStatus s) => s switch
+    {
+        LoanRepaymentStatus.Collected => "مُحصَّل",
+        LoanRepaymentStatus.Skipped => "متخطى",
+        LoanRepaymentStatus.Adjusted => "مُعدَّل",
+        _ => "مستحق"
+    };
+}
+<partial name="_BackHome" />
+<div class="card">
+    <div class="card-head">
+        <div>
+            <h2>أقساط: @Model.Employee?.FullName — @Model.Amount.ToString("N2") EGP</h2>
+            <div class="sub">المدفوع: @Model.PaidAmount.ToString("N2") — المتبقي: @Model.OutstandingBalance.ToString("N2") EGP — @(Model.IsPaused ? "موقوف مؤقتًا" : "نشط") — القسط الشهري: @(Model.InstallmentAmount > 0 ? Model.InstallmentAmount.ToString("N2") : "تلقائي") — البدء: @(Model.RepaymentStartYear > 0 ? $"{Model.RepaymentStartYear}-{Model.RepaymentStartMonth:00}" : "—")</div>
+        </div>
+        <div class="btn-row">
+            <form method="post" asp-action="TogglePause" asp-route-id="@Model.Id" class="d-inline" data-confirm="تغيير حالة إيقاف السداد؟">
+                <button type="submit" class="btn btn-ghost btn-sm">@(Model.IsPaused ? "استئناف السداد" : "إيقاف مؤقت")</button>
+            </form>
+            <a class="btn btn-ghost btn-sm" asp-action="Index">رجوع للسلف والقروض</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <form method="post" asp-action="SetSchedule" asp-route-id="@Model.Id" class="filters">
+            <div class="field"><label>القسط الشهري</label><input type="number" name="installmentAmount" value="@Model.InstallmentAmount" step="0.01" min="0" /></div>
+            <div class="field"><label>سنة البدء</label><input type="number" name="startYear" value="@(Model.RepaymentStartYear > 0 ? Model.RepaymentStartYear : DateTime.Today.Year)" /></div>
+            <div class="field"><label>شهر البدء</label><input type="number" name="startMonth" value="@(Model.RepaymentStartMonth > 0 ? Model.RepaymentStartMonth : DateTime.Today.Month)" min="1" max="12" /></div>
+            <div class="field actions"><button type="submit" class="btn btn-primary">حفظ الجدول</button></div>
+        </form>
+    </div>
+    @if (rows.Count == 0)
+    {
+        <div class="card-body">
+            <p class="hint">لا توجد أقساط بعد — تُنشأ الأقساط تلقائيًا عند احتساب كشف الراتب لشهر الاستحقاق. يمكن تخطي شهر مسبقًا من الأسفل.</p>
+            <form method="post" asp-action="SkipMonth" asp-route-id="@Model.Id" class="filters">
+                <div class="field"><label>السنة</label><input type="number" name="year" value="@DateTime.Today.Year" /></div>
+                <div class="field"><label>الشهر</label><input type="number" name="month" value="@DateTime.Today.Month" min="1" max="12" /></div>
+                <div class="field actions"><button type="submit" class="btn btn-ghost" data-confirm="تخطي قسط هذا الشهر؟ سيبقى المبلغ في الرصيد.">تخطي شهر</button></div>
+            </form>
+        </div>
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>الفترة</th><th>المستحق</th><th>المحصل</th><th>الحالة</th><th>في كشف؟</th><th>ملاحظات</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var r in rows)
+                {
+                    <tr>
+                        <td class="num">@r.Year-@r.Month.ToString("00")</td>
+                        <td class="num money">@r.DueAmount.ToString("N2")</td>
+                        <td class="num money">@r.PaidAmount.ToString("N2")</td>
+                        <td><span class="badge @(r.Status == LoanRepaymentStatus.Collected ? "ok" : r.Status == LoanRepaymentStatus.Skipped ? "muted" : "warn")">@RText(r.Status)</span></td>
+                        <td>@(r.PayrollItemId.HasValue ? "نعم" : "لا")</td>
+                        <td class="wrap">@(string.IsNullOrWhiteSpace(r.Notes) ? "—" : r.Notes)</td>
+                        <td>
+                            @if (r.Status == LoanRepaymentStatus.Due && !r.PayrollItemId.HasValue)
+                            {
+                                <form method="post" asp-action="SkipMonth" asp-route-id="@Model.Id" class="d-inline">
+                                    <input type="hidden" name="year" value="@r.Year" />
+                                    <input type="hidden" name="month" value="@r.Month" />
+                                    <button type="submit" class="btn btn-ghost btn-sm" data-confirm="تخطي هذا القسط؟ سيبقى في الرصيد ولن يُخصم.">تخطي</button>
+                                </form>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
