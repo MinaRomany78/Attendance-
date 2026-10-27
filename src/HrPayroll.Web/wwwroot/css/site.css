@@ -1,0 +1,68 @@
+/* ============================================================
+   نظام الموارد البشرية والرواتب — نظام التصميم الجديد (v2)
+   هوية بصرية: تركوازي عميق + رملي، شريط جانبي فاتح، بطاقات حديثة
+   RTL · عربي · Cairo
+   ============================================================ */
+
+/* ------------------------- الرموز (Tokens) ------------------------- */
+:root {
+    color-scheme: light;
+    --brand: #0c6b5c;
+    --brand-700: #09584c;
+    --brand-900: #073f36;
+    --brand-50: #e6f3ef;
+    --brand-100: #cde7df;
+    --accent: #b07d1e;
+    --accent-50: #faf3e3;
+    --warn: #a9701a;
+    --warn-50: #fdf6e8;
+    --danger: #b3374a;
+    --danger-50: #fdecee;
+    --info: #2b5f8f;
+    --info-50: #eef4fa;
+
+    --ink: #1c2b33;
+    --ink-2: #44565f;
+    --ink-3: #647687;
+    --line: #dde5e3;
+    --line-2: #edf2f0;
+    --bg: #edf2f0;
+    --surface: #ffffff;
+
+    --radius: 14px;
+    --radius-sm: 10px;
+    --radius-xs: 7px;
+    --shadow-sm: 0 1px 2px rgba(12, 60, 52, .06);
+    --shadow: 0 2px 6px rgba(12, 60, 52, .07), 0 10px 26px rgba(12, 60, 52, .08);
+
+    --sidebar-w: 248px;
+    --sidebar-w-sm: 70px;
+    --topbar-h: 62px;
+
+    /* أعمدة ورقة المرتبات */
+    --w-code: 80px;
+    --w-name: 190px;
+
+    /* أسطح ثانوية وخلفيات إدخال وتمييز صفوف (تتبدل في السمة الداكنة) */
+    --surface-2: #fbfdfc;
+    --input-bg: #ffffff;
+    --dirty: #fffdf3;
+    --editable: #fffdf5;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Arial, "Segoe UI", Tahoma, sans-serif;
+    font-size: 15px;
+    line-height: 1.65;
+    -webkit-text-size-adjust: 100%;
+}
+
+a { color: var(--brand-700); text-decoration: none; }
+a:hover { color: var(--brand-900); text-decoration: underline; }
+h1, h2, h3, h4 { margin: 0; font-weight: 700; line-height: 1.4; letter-spacing: 0; }
