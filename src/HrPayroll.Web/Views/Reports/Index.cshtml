@@ -67,6 +67,7 @@
         </form>
     </div>
 </div>
+
 <div class="stat-grid">
     <div class="stat"><div class="label">📋 سجلات الحضور</div><div class="value">@Model.DailyRowCount</div></div>
     <div class="stat"><div class="label">⏱️ صفوف الإضافي</div><div class="value">@Model.OvertimeRowCount</div></div>
@@ -76,6 +77,7 @@
     <div class="stat"><div class="label">🌴 طلبات الإجازة</div><div class="value">@Model.LeaveRowCount</div></div>
     <div class="stat"><div class="label">💰 أرصدة إجازات</div><div class="value">@Model.LeaveBalanceCount</div></div>
 </div>
+
 <div class="card">
     <div class="card-head"><h3>التقارير المتاحة</h3></div>
     <div class="card-body">
@@ -158,6 +160,7 @@
         </div>
     </div>
 </div>
+
 <div class="card">
     <div class="card-head"><h3>تقارير الرواتب</h3></div>
     @if (Model.PayrollRuns.Count == 0)

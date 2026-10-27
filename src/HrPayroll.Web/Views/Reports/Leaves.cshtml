@@ -14,6 +14,7 @@
         ["search"] = f.Search ?? string.Empty
     };
 }
+
 <div class="card">
     <div class="card-head">
         <div>
@@ -81,6 +82,7 @@
         </form>
     </div>
 </div>
+
 <div class="stat-grid">
     <div class="stat"><div class="label">📄 طلبات الإجازة</div><div class="value">@Model.Rows.Count</div></div>
     <div class="stat warn"><div class="label">⏳ قيد المراجعة</div><div class="value">@Model.PendingCount</div></div>
@@ -95,6 +97,7 @@
         }
     </div>
 </div>
+
 <div class="card">
     <div class="card-head"><h3>طلبات الإجازة في الفترة</h3></div>
     @if (Model.Rows.Count == 0)
@@ -147,6 +150,7 @@
         </div>
     }
 </div>
+
 <div class="card">
     <div class="card-head">
         <h3>أرصدة الإجازة السنوية</h3>
@@ -188,6 +192,7 @@
         </div>
     }
 </div>
+
 @functions {
     private static string StatusText(ApprovalStatus s) => s switch
     {
