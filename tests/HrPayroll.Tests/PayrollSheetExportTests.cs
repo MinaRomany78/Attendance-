@@ -69,7 +69,7 @@ public class PayrollSheetExportTests
         Assert.Equal(stored.OriginalAbsenceDays, ws.Cell(6, 9).GetValue<decimal>());
         Assert.Equal(5m, ws.Cell(6, 9).GetValue<decimal>());      // الغياب من البصمة يبقى 5
         Assert.Equal(2m, ws.Cell(6, 10).GetValue<decimal>());     // الغياب المعتمد
-        Assert.Equal(2m, ws.Cell(6, 11).GetValue<decimal>());    // الإجازة السنوية
+        Assert.Equal(2m, ws.Cell(6, 11).GetValue<decimal>());     // الإجازة السنوية
         Assert.Equal(19m, ws.Cell(6, 12).GetValue<decimal>());    // الرصيد بعد خصم يومين
         Assert.Equal(300m, ws.Cell(6, 18).GetValue<decimal>());   // المكافآت
         Assert.Equal(stored.NetSalary, ws.Cell(6, 29).GetValue<decimal>());
@@ -105,3 +105,4 @@ public class PayrollSheetExportTests
             });
         }
     }
+}

@@ -107,3 +107,4 @@ public class ShiftDetectionTests
         Assert.True(result.IsNone);
         Assert.Null(result.Shift);
     }
+}
