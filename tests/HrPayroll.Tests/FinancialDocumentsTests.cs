@@ -288,3 +288,4 @@ public class FinancialDocumentsTests
                 () => Payroll(ctx).GenerateAsync(2024, 10, user: "test"));
         }
     }
+}
