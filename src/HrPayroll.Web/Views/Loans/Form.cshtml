@@ -16,6 +16,7 @@
             <input type="hidden" asp-for="Id" />
             <div asp-validation-summary="ModelOnly" class="alert alert-danger"
                  style="display:@(ViewData.ModelState.ErrorCount > 0 ? "flex" : "none")"></div>
+
             <div class="form-grid">
                 <div class="field span-2">
                     <label asp-for="EmployeeId">الموظف</label>
@@ -54,6 +55,7 @@
                     <textarea asp-for="Notes" rows="2"></textarea>
                 </div>
             </div>
+
             <div class="btn-row" style="margin-top:20px">
                 <button type="submit" class="btn btn-primary btn-lg">@(isEdit ? "حفظ التعديلات" : "تسجيل السلفة")</button>
                 <a class="btn btn-ghost btn-lg" asp-action="Index">إلغاء</a>
@@ -61,4 +63,5 @@
         </form>
     </div>
 </div>
+
 @section Scripts { <partial name="_ValidationScriptsPartial" /> }
