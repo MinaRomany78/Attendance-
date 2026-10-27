@@ -1,58 +1,48 @@
-@using HrPayroll.Infrastructure.Services
-@model HrPayroll.Web.ViewModels.PayrollDetailsViewModel
-@{
-    ViewData["Title"] = $"كشف رواتب {Model.Run.Year}-{Model.Run.Month:00}";
+@using HrPayroll.Web.Controllers
+@model HrPayroll.Web.ViewModels.PayrollDetailsVm
+@{ Layout = "_Layout"; ViewData["Title"] = "تفاصيل بند المرتب"; }
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h2>تفاصيل بند المرتب</h2>
+        <p class="text-muted mb-0">@(Model.EmployeeName) — @(Model.RunLabel)</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" asp-action="Payslip" asp-route-id="@Model.ItemId">قسيمة الراتب</a>
+        @await Html.PartialAsync("_BackHome", "عودة")
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row small">
+            <div class="col-md-4"><strong>رقم الموظف:</strong> @Model.EmployeeCode</div>
+            <div class="col-md-4"><strong>الأساسي:</strong> @Model.BasicSalary.ToString("N2")</div>
+            <div class="col-md-4"><strong>أجر الساعة:</strong> @Model.HourlyRate.ToString("N4")</div>
+            <div class="col-md-4"><strong>أيام الغياب المعتمدة:</strong> @Model.AbsenceDays (@(Model.AbsenceAmount.ToString("N2")))</div>
+            <div class="col-md-4"><strong>الأصلية:</strong> @Model.OriginalAbsenceDays</div>
+            <div class="col-md-4"><strong>إجازة سنوية:</strong> @Model.AnnualLeaveDays يوم (رصيد @Model.AnnualLeaveBalance)</div>
+            <div class="col-md-4"><strong>المتأخرات:</strong> @Model.UnpaidCarryoverAmount.ToString("N2")</div>
+            <div class="col-md-4"><strong>إضافي معتمد:</strong> @Model.PaidOvertimeHours ساعة (@(Model.OvertimeAmount.ToString("N2")))</div>
+            <div class="col-md-4"><strong>إضافي فعلي:</strong> @Model.RawOvertimeHours ساعة</div>
+            <div class="col-md-4"><strong>مكافآت:</strong> @Model.Bonuses.ToString("N2")</div>
+            <div class="col-md-4"><strong>تأخير:</strong> @Model.LateMinutes دقيقة (@(Model.LateAmount.ToString("N2")))</div>
+            <div class="col-md-4"><strong>خصومات:</strong> @Model.DeductionsTotal.ToString("N2")</div>
+            <div class="col-md-4"><strong>سُلف:</strong> @Model.AdvancesTotal.ToString("N2")</div>
+            <div class="col-md-4"><strong>أقساط قروض:</strong> @Model.LoanInstallmentsTotal.ToString("N2")</div>
+            <div class="col-md-4"><strong>تعديلات:</strong> @Model.AdjustmentsTotal.ToString("N2")</div>
+            <div class="col-md-4"><strong>الإجمالي المستحق:</strong> @Model.GrossEarnings.ToString("N2")</div>
+            <div class="col-md-4"><strong>إجمالي الاستقطاعات:</strong> @Model.TotalDeductions.ToString("N2")</div>
+            <div class="col-md-4"><strong>الصافي:</strong> @Model.NetSalary.ToString("N2")</div>
+        </div>
+    </div>
+</div>
+
+@if (Model.IsLocked)
+{
+    <div class="alert alert-warning">هذا البند تابع لتشغيل نهائي (مغلق).</div>
 }
-<div class="card">
-    <div class="card-head">
-        <div>
-            <h2>كشف رواتب @Model.Run.Year-@Model.Run.Month.ToString("00") — إصدار @Model.Run.Version</h2>
-            <div class="sub">الحالة: @ExcelExportService.PayrollStatusText(Model.Run.Status) — محسوب بواسطة @(Model.Run.ComputedBy ?? "-")</div>
-        </div>
-        <div class="btn-row">
-            <a class="btn btn-soft btn-sm" asp-action="ExportExcel" asp-route-id="@Model.Run.Id">Excel</a>
-            <a class="btn btn-soft btn-sm" asp-action="ExportPdf" asp-route-id="@Model.Run.Id">PDF</a>
-            <a class="btn btn-ghost btn-sm" asp-action="Index" asp-route-year="@Model.Run.Year" asp-route-month="@Model.Run.Month">رجوع</a>
-        </div>
-    </div>
-</div>
-<div class="stat-grid">
-    <div class="stat"><div class="label">عدد الموظفين</div><div class="value">@Model.TotalEmployees</div></div>
-    <div class="stat"><div class="label">إجمالي الأساسي</div><div class="value">@Model.TotalBasic.ToString("N2")</div></div>
-    <div class="stat"><div class="label">إجمالي الإضافي</div><div class="value">@Model.TotalOvertime.ToString("N2")</div></div>
-    <div class="stat"><div class="label">مكافآت وبدلات وأيام إضافية</div><div class="value">@Model.TotalBonuses.ToString("N2")</div></div>
-    <div class="stat bad"><div class="label">إجمالي الخصومات</div><div class="value">@Model.TotalDeductions.ToString("N2")</div></div>
-    <div class="stat ok"><div class="label">الصافي</div><div class="value">@Model.TotalNet.ToString("N2")</div></div>
-</div>
-<div class="card">
-    <div class="card-head"><h3>تفاصيل الموظفين</h3></div>
-    <div class="table-wrap">
-        <table class="data">
-            <thead>
-            <tr>
-                <th>كود</th><th>الاسم</th><th>القسم</th><th>الأساسي</th><th>الأجر اليومي</th><th>أجر الساعة</th>
-                <th>إضافي معتمد</th><th>قيمة الإضافي</th><th>إجمالي الاستحقاقات</th><th>إجمالي الخصومات</th><th>الصافي</th><th></th>
-            </tr>
-            </thead>
-            <tbody>
-            @foreach (var r in Model.Rows)
-            {
-                <tr>
-                    <td class="num">@r.EmployeeCode</td>
-                    <td>@r.EmployeeName</td>
-                    <td>@(r.Department ?? "-")</td>
-                    <td class="money">@r.BasicSalary.ToString("N2")</td>
-                    <td class="money">@r.DailyRate.ToString("N2")</td>
-                    <td class="money">@r.HourlyRate.ToString("N2")</td>
-                    <td class="num">@r.ApprovedOvertimeHours</td>
-                    <td class="money">@r.OvertimeAmount.ToString("N2")</td>
-                    <td class="money">@r.GrossEarnings.ToString("N2")</td>
-                    <td class="money">@r.TotalDeductions.ToString("N2")</td>
-                    <td class="money">@r.NetSalary.ToString("N2")</td>
-                    <td><a class="btn btn-soft btn-sm" asp-action="Payslip" asp-route-id="@r.PayrollItemId">كشف الراتب</a></td>
-                </tr>
-            }
-            </tbody>
-        </table>
-    </div>
-</div>
+@if (Model.IsManuallyAdjusted)
+{
+    <div class="alert alert-info">تم تعديل هذا البند يدويًا بواسطة @Model.LastEditedBy</div>
+}
