@@ -1,20 +1,29 @@
 using HrPayroll.Domain.Entities;
-using HrPayroll.Domain.Enums;
 using HrPayroll.Domain.Models;
 using HrPayroll.Domain.ValueObjects;
 
 namespace HrPayroll.Domain.Services;
 
+/// <summary>إسناد بصمة واحدة إلى يوم عمل واحد (تاريخ بداية الوردية).</summary>
+public sealed record PunchWorkDate(int PunchId, DateTime WorkDate, bool IsAmbiguous, int? ShiftId);
+
 /// <summary>
 /// يُسند كل بصمة خام إلى يوم عمل واحد فقط.
 ///
-/// المشكلة: البصمة الواحدة قد تقع داخل أكثر من نافذة وردية، وإسنادها ليومين يجعلها تُحتسب مرتين.
-/// القاعدة المطبَّقة (بالأولوية): الجودة، ثم الوردية المُسندة، ثم تاريخ البصمة نفسه، ثم الأقرب للحافة.
+/// المشكلة: البصمة الواحدة قد تقع داخل أكثر من نافذة وردية (وردية نهارية ووردية ليلية
+/// تبدأ اليوم السابق وتنتهي صباح اليوم الحالي)، وإسنادها ليومين يجعلها تُحتسب مرتين.
+///
+/// القاعدة المطبَّقة (بالأولوية):
+/// 1) الجودة: بصمة داخل مدة الوردية أفضل من بصمة داخل السماح، وهما أفضل من بصمة داخل
+///    هامش التسامح فقط.
+/// 2) الوردية المُسندة للموظف في ذلك التاريخ تُرجَّح درجة واحدة.
+/// 3) تاريخ البصمة نفسه يُرجَّح على نقله إلى يوم سابق (القراءة النهارية الطبيعية).
+/// 4) الأقرب إلى بداية/نهاية الوردية ثم الأقدم تاريخًا.
+///
+/// إذا تعادل تاريخان مختلفان بنفس الدرجة والترجيح يُعلَّم الإسناد كغامض ليُراجعه المستخدم.
 /// </summary>
 public static class PunchWorkDateResolver
 {
-    public sealed record PunchWorkDate(int PunchId, DateTime WorkDate, bool IsAmbiguous, int? ShiftId);
-
     private sealed record Candidate(DateTime Date, int ShiftId, int Quality, bool OwnDate, double EdgeDistance);
 
     public static Dictionary<int, PunchWorkDate> Assign(
@@ -43,6 +52,7 @@ public static class PunchWorkDateResolver
 
             foreach (var shift in active)
             {
+                // تاريخ البصمة وتاريخ اليوم السابق (احتمال وردية ليلية بدأت أمس)
                 var dates = new[] { punch.PunchTime.Date, punch.PunchTime.Date.AddDays(-1) };
                 foreach (var date in dates)
                 {
