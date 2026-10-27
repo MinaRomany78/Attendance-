@@ -24,9 +24,11 @@
             <div class="def"><div class="k">الإضافي المعتمد</div><div class="v">@d.ApprovedOvertimeMinutes دقيقة</div></div>
             <div class="def"><div class="k">تصحيح يدوي سابق؟</div><div class="v">@(d.IsManualOverride ? "نعم" : "لا")</div></div>
         </div>
+
         <div class="alert alert-info" style="margin-top:16px">
             <span>البصمات الخام تبقى محفوظة كما وردت من الجهاز، والتصحيح يُسجَّل مع القيمة الأصلية والمصححة والسبب والمستخدم والوقت.</span>
         </div>
+
         <form method="post" asp-action="Correct" asp-route-id="@d.Id">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" style="display:@(ViewData.ModelState.ErrorCount > 0 ? "flex" : "none")"></div>
             <div class="form-grid">
@@ -68,6 +70,7 @@
         </form>
     </div>
 </div>
+
 <div class="card">
     <div class="card-head"><h3>سجل التصحيحات على هذا اليوم (@Model.History.Count)</h3></div>
     @if (Model.History.Count == 0)
