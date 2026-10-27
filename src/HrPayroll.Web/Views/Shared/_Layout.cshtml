@@ -1,0 +1,97 @@
+@using Microsoft.AspNetCore.Identity
+@using HrPayroll.Domain.Entities
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@{
+    var isAuth = SignInManager.IsSignedIn(User);
+    var isAdmin = User.IsInRole(AppRoles.Admin);
+    var isHr = isAdmin || User.IsInRole(AppRoles.Hr);
+    var title = ViewData["Title"] as string;
+    var subtitle = ViewData["Subtitle"] as string;
+    var userName = User.Identity?.Name ?? "";
+    var initial = userName.Length > 0 ? userName.Trim()[0].ToString() : "م";
+}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="light">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@title — نظام الموارد البشرية والرواتب</title>
+    <script>
+        // تطبيق السمة المحفوظة مبكرًا لتفادي وميض السمة الخاطئة
+        (function () {
+            try {
+                var t = localStorage.getItem('hr.theme');
+                if (t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t);
+                else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+                    document.documentElement.setAttribute('data-theme', 'dark');
+            } catch (e) { /* التخزين المحلي غير متاح */ }
+        })();
+    </script>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.rtl.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+</head>
+<body>
+@if (isAuth)
+{
+    <div class="topbar-wrap">
+        <header class="topbar topbar-slim">
+            <a class="brand-inline" asp-controller="Dashboard" asp-action="Index" title="الرئيسية">
+                <span class="logo">HR</span>
+                <span class="brand-text">الموارد البشرية <small>الحضور والرواتب</small></span>
+            </a>
+            <a class="topbar-home" asp-controller="Dashboard" asp-action="Index">الرئيسية</a>
+            <div class="topbar-actions">
+                @if (isHr)
+                {
+                    <form class="topbar-search no-print" asp-controller="Employees" asp-action="Index" method="get">
+                        <input type="search" name="search" placeholder="بحث سريع: اسم أو كود" aria-label="بحث سريع عن موظف" />
+                        <button type="submit" class="btn btn-ghost btn-sm">بحث</button>
+                    </form>
+                }
+                <button type="button" class="theme-toggle" id="themeToggle" title="تبديل السمة (فاتح / داكن)" aria-label="تبديل السمة">
+                    <svg class="ico-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.4M12 19.1v2.4M4.3 4.3l1.7 1.7M18 18l1.7 1.7M2.5 12h2.4M19.1 12h2.4M4.3 19.7 6 18M18 6l1.7-1.7" /></svg>
+                    <svg class="ico-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13.2A8 8 0 0 1 10.8 4 8 8 0 1 0 20 13.2Z" /></svg>
+                </button>
+                <span class="user-chip"><span class="avatar">@initial</span> @userName</span>
+                <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-ghost btn-sm">خروج</button>
+                </form>
+            </div>
+        </header>
+        <main class="content content-centered">
+            @if (TempData["Success"] != null)
+            {
+                <div class="alert alert-success" data-auto-dismiss="7000">
+                    <span>@TempData["Success"]</span>
+                    <button type="button" class="close" aria-label="إغلاق">×</button>
+                </div>
+            }
+            @if (TempData["Error"] != null)
+            {
+                <div class="alert alert-danger">
+                    <span>@TempData["Error"]</span>
+                    <button type="button" class="close" aria-label="إغلاق">×</button>
+                </div>
+            }
+            @if (TempData["Warning"] != null)
+            {
+                <div class="alert alert-warning">
+                    <span>@TempData["Warning"]</span>
+                    <button type="button" class="close" aria-label="إغلاق">×</button>
+                </div>
+            }
+            @RenderBody()
+        </main>
+    </div>
+}
+else
+{
+    <main class="auth-area">@RenderBody()</main>
+}
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
