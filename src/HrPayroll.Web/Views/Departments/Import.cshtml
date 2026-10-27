@@ -1,0 +1,64 @@
+@model HrPayroll.Web.ViewModels.DepartmentImportPreview
+@{
+    ViewData["Title"] = "استيراد الأقسام";
+    var a = Model.Analysis;
+}
+<partial name="_BackHome" />
+<div class="card">
+    <div class="card-head">
+        <div>
+            <h2>استيراد الأقسام من Excel</h2>
+            <div class="sub">الأسماء تُطبَّع (إزالة المساحات الزائدة) والمقارنة غير حساسة لحالة الأحرف — الموجود يُتخطَّى ولا يُستبدل.</div>
+        </div>
+        <div class="btn-row">
+            <a class="btn btn-ghost btn-sm" asp-action="DownloadTemplate">تحميل قالب الاستيراد</a>
+            <a class="btn btn-ghost btn-sm" asp-action="Export">تصدير الأقسام</a>
+        </div>
+    </div>
+    <div class="card-body">
+        <form method="post" asp-action="Import" enctype="multipart/form-data" class="filters">
+            <div class="field">
+                <label>ملف Excel</label>
+                <input type="file" name="file" accept=".xlsx,.xls" required />
+            </div>
+            <div class="field actions">
+                <button type="submit" class="btn btn-primary">معاينة الملف</button>
+            </div>
+        </form>
+    </div>
+</div>
+@if (a is not null)
+{
+    <div class="card">
+        <div class="card-head"><h3>معاينة: @(Model.FileName ?? "") — جديد: @a.NewCount — موجود: @a.ExistingCount — مكرر: @a.DuplicateCount — غير صالح: @a.InvalidCount</h3></div>
+        <div class="table-wrap">
+            <table class="data">
+                <thead><tr><th>الصف</th><th>الاسم</th><th>الكود</th><th>المدير</th><th>النتيجة</th></tr></thead>
+                <tbody>
+                @foreach (var r in a.Rows)
+                {
+                    <tr>
+                        <td class="num">@r.RowNumber</td>
+                        <td>@r.Name</td>
+                        <td class="num">@(r.Code ?? "—")</td>
+                        <td>@(r.ManagerName ?? "—")</td>
+                        <td>@r.Message</td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        <div class="card-body">
+            @if (a.NewCount > 0)
+            {
+                <form method="post" asp-action="ImportConfirm">
+                    <button type="submit" class="btn btn-primary" data-confirm="استيراد @a.NewCount قسم جديد؟">تأكيد استيراد @a.NewCount قسم</button>
+                </form>
+            }
+            else
+            {
+                <p class="hint">لا توجد أقسام جديدة للاستيراد.</p>
+            }
+        </div>
+    </div>
+}
