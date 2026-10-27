@@ -188,7 +188,6 @@ public class EmployeesController : Controller
         var dept = vm.DepartmentId.HasValue
             ? await _db.Departments.AsNoTracking().FirstOrDefaultAsync(d => d.Id == vm.DepartmentId.Value, ct)
             : null;
-
         var job = vm.JobTitleId.HasValue
             ? await _db.JobTitles.AsNoTracking().FirstOrDefaultAsync(j => j.Id == vm.JobTitleId.Value, ct)
             : null;
