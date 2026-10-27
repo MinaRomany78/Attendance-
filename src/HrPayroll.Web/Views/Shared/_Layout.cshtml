@@ -59,6 +59,7 @@
                 </form>
             </div>
         </header>
+
         <main class="content content-centered">
             @if (TempData["Success"] != null)
             {
@@ -89,6 +90,7 @@ else
 {
     <main class="auth-area">@RenderBody()</main>
 }
+
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
