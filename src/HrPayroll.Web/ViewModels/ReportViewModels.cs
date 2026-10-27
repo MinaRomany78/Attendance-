@@ -27,6 +27,7 @@ public class DailyReportViewModel
     public List<Department> Departments { get; set; } = new();
     public List<Shift> Shifts { get; set; } = new();
     public List<Employee> Employees { get; set; } = new();
+    public List<DepartmentReportRow> DepartmentRows { get; set; } = new();
     public bool GroupByDepartment { get; set; } = true;
 }
 
