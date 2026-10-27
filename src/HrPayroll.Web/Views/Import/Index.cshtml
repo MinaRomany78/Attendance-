@@ -23,6 +23,7 @@
     <div class="card-body">
         <form method="post" asp-action="Upload" enctype="multipart/form-data"
               id="importForm" data-file-zones data-loading-text="جارٍ التحقق من الملفات...">
+
             <div class="upload-grid">
                 <!-- ===================== منطقة ملف الدخول ===================== -->
                 <section class="upload-zone zone-entry" data-zone="entry">
@@ -34,6 +35,7 @@
                         </div>
                         <span class="file-state" data-file-state="entry">لم يتم الاختيار</span>
                     </header>
+
                     <label class="upload-drop">
                         <input type="file" name="entryFile" id="entryFile"
                                accept=".xlsx,.xls,.csv,.xml,.txt" data-file-input="entry" />
@@ -41,6 +43,7 @@
                         <span class="upload-drop-cta">اختيار ملف الدخول</span>
                         <span class="upload-drop-hint">اضغط لاختيار الملف أو اسحبه هنا — xlsx / xls / csv / xml</span>
                     </label>
+
                     <ul class="upload-meta">
                         <li><span class="k">اسم الملف:</span> <span class="v" data-file-name="entry">—</span></li>
                         <li><span class="k">حجم الملف:</span> <span class="v" data-file-size="entry">—</span></li>
@@ -48,6 +51,7 @@
                         <li><span class="k">الحالة:</span> <span class="v" data-file-state-detail="entry">بانتظار اختيار الملف</span></li>
                     </ul>
                 </section>
+
                 <!-- ===================== منطقة ملف الخروج ===================== -->
                 <section class="upload-zone zone-exit" data-zone="exit">
                     <header class="upload-zone-head">
@@ -58,6 +62,7 @@
                         </div>
                         <span class="file-state" data-file-state="exit">لم يتم الاختيار</span>
                     </header>
+
                     <label class="upload-drop">
                         <input type="file" name="exitFile" id="exitFile"
                                accept=".xlsx,.xls,.csv,.xml,.txt" data-file-input="exit" />
@@ -65,6 +70,7 @@
                         <span class="upload-drop-cta">اختيار ملف الخروج</span>
                         <span class="upload-drop-hint">اضغط لاختيار الملف أو اسحبه هنا — xlsx / xls / csv / xml</span>
                     </label>
+
                     <ul class="upload-meta">
                         <li><span class="k">اسم الملف:</span> <span class="v" data-file-name="exit">—</span></li>
                         <li><span class="k">حجم الملف:</span> <span class="v" data-file-size="exit">—</span></li>
@@ -73,9 +79,11 @@
                     </ul>
                 </section>
             </div>
+
             <div class="alert alert-danger upload-error" id="importFormError" hidden>
                 <span>اختر ملف الدخول أو ملف الخروج على الأقل قبل المتابعة.</span>
             </div>
+
             <div class="alert alert-info" style="margin-top:16px">
                 <span>
                     المطابقة تتم بكود الموظف/كود البصمة لا بالاسم، فلا تُدمج بيانات موظفين متشابهين في الاسم.
@@ -83,6 +91,7 @@
                     للمراجعة دون ربطه بموظف آخر. يمكن رفع أحد الملفين فقط إذا كان متاحًا.
                 </span>
             </div>
+
             <div class="upload-submit">
                 <button type="submit" class="btn btn-primary btn-lg">رفع الملفات ومعالجة الحضور</button>
                 <span class="hint">سيتم تحليل الملفين والتحقق منهما ثم عرض معاينة مستقلة لكل ملف قبل أي استيراد.</span>
@@ -90,6 +99,7 @@
         </form>
     </div>
 </div>
+
 <div class="card">
     <div class="card-head">
         <h3>سجل عمليات الاستيراد</h3>

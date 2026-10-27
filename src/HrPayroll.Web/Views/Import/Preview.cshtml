@@ -5,6 +5,7 @@
     ViewData["Title"] = "معاينة ملفات البصمة";
     var failedZones = Model.Zones.Where(z => z.Provided && !z.Ok).ToList();
 }
+
 <div class="card">
     <div class="card-head">
         <div>
@@ -14,6 +15,7 @@
         <a class="btn btn-ghost btn-sm" asp-action="Index">رفع ملفات أخرى</a>
     </div>
 </div>
+
 <div class="stat-grid">
     <div class="stat @(Model.FilesWithNewRecords > 0 ? "ok" : "warn")">
         <div class="label">ملفات بها سجلات جديدة</div><div class="value">@Model.FilesWithNewRecords <small>من 2</small></div>
@@ -23,6 +25,7 @@
     <div class="stat warn"><div class="label">سجلات مكررة</div><div class="value">@Model.TotalDuplicates</div></div>
     <div class="stat bad"><div class="label">تحتاج إلى مراجعة</div><div class="value">@Model.TotalNeedsReview</div></div>
 </div>
+
 @if (failedZones.Count > 0)
 {
     <div class="alert alert-warning">
@@ -32,6 +35,7 @@
         </span>
     </div>
 }
+
 @foreach (var z in Model.Zones)
 {
     <div class="card @(z.Ok ? "" : "zone-failed")">
@@ -55,6 +59,7 @@
             </div>
             <span class="file-state @z.StatusClass">@z.StatusText</span>
         </div>
+
         @if (z.Error is not null)
         {
             <div class="card-body">
@@ -71,6 +76,7 @@
                     <div class="stat bad"><div class="label">موظف غير مسجل</div><div class="value">@z.UnknownEmployees</div></div>
                     <div class="stat bad"><div class="label">تاريخ/وقت غير صالح</div><div class="value">@z.Invalid</div></div>
                 </div>
+
                 <div class="section-title">الأعمدة المكتشفة في الملف</div>
                 <div class="table-wrap">
                     <table class="data">
@@ -85,6 +91,7 @@
                         </tbody>
                     </table>
                 </div>
+
                 @if (z.NeedsReview > 0)
                 {
                     <div class="alert alert-warning" style="margin-top:12px">
@@ -94,6 +101,7 @@
                         </span>
                     </div>
                 }
+
                 @if (a.Preview.Count > 0)
                 {
                     <div class="section-title">أول @a.Preview.Count صف من المعاينة</div>
@@ -132,6 +140,7 @@
         }
     </div>
 }
+
 <div class="card">
     <div class="card-head"><h3>تأكيد الاستيراد ومعالجة الحضور</h3></div>
     <div class="card-body">
@@ -171,16 +180,19 @@
                     <input type="hidden" name="exitToken" value="@Model.Exit.Token" />
                     <input type="hidden" name="exitName" value="@Model.Exit.FileName" />
                 }
+
                 <label class="switch" style="margin-bottom:14px">
                     <input type="checkbox" name="processAttendance" value="true" checked />
                     <span>معالجة الحضور تلقائيًا بعد الاستيراد للفترة المكتشفة في الملفات</span>
                 </label>
+
                 <div class="alert alert-info">
                     <span>
                         سيتم استيراد @Model.TotalAccepted بصمة جديدة من @Model.FilesWithNewRecords ملف. السجلات المكررة والمرفوضة لن تُستورد ولن تُكرَّر،
                         ويمكن مراجعة الملفات غير الصالحة بعد التصحيح وإعادة الرفع دون مضاعفة السجلات.
                     </span>
                 </div>
+
                 <div class="btn-row">
                     <button type="submit" class="btn btn-accent btn-lg">تأكيد الاستيراد ومعالجة الحضور</button>
                     <a class="btn btn-ghost btn-lg" asp-action="Index">إلغاء</a>
@@ -189,12 +201,14 @@
         }
     </div>
 </div>
+
 @functions {
     private string Header(HrPayroll.Web.ViewModels.ImportFileZoneViewModel z, int? index)
     {
         var headers = z.Analysis?.Headers ?? new List<string>();
         return index.HasValue && index.Value < headers.Count ? headers[index.Value] : $"العمود #{index + 1}";
     }
+
     private static string RowStatusText(ImportRowStatus status) => status switch
     {
         ImportRowStatus.Success => "مقبول",
