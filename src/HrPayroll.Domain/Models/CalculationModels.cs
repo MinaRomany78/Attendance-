@@ -85,3 +85,125 @@ public sealed class AttendancePolicy
         return (int)rounded * step;
     }
 }
+
+/// <summary>سياسة الإضافي المطبقة على موظف في يوم/فترة.</summary>
+public sealed record OvertimePolicy(decimal Multiplier, int RoundingStepMinutes, bool RoundDown)
+{
+    public static OvertimePolicy Company(AttendancePolicy policy) =>
+        new(policy.DefaultOvertimeMultiplier <= 0 ? 1m : policy.DefaultOvertimeMultiplier,
+            policy.OvertimeRoundingStepMinutes, policy.RoundOvertimeDown);
+}
+
+/// <summary>بصمة خام مدخلة للمصنّف.</summary>
+public sealed record RawPunchInput(
+    int Id,
+    string DeviceEmployeeCode,
+    string? DeviceId,
+    string? AttType,
+    DateTime PunchTime,
+    string? RawTimeText,
+    int? RowNumber);
+
+/// <summary>حدث مصنف.</summary>
+public sealed record ClassifiedEvent(
+    RawPunchInput Punch,
+    AttendanceEventType EventType,
+    ClassificationStatus Status,
+    ClassificationSource Source,
+    decimal Confidence,
+    string? Note);
+
+/// <summary>نتيجة تصنيف يوم كامل.</summary>
+public sealed class DayClassificationResult
+{
+    public DateTime WorkDate { get; init; }
+    public List<ClassifiedEvent> Events { get; init; } = new();
+    public DateTime? CheckIn { get; init; }
+    public DateTime? CheckOut { get; init; }
+    public int? EntryPunchId { get; init; }
+    public int? ExitPunchId { get; init; }
+    public ClassificationStatus Status { get; init; }
+    public AttendanceStatus SuggestedStatus { get; init; }
+    public bool HasIncompletePunches { get; init; }
+    public string? Reason { get; init; }
+    public int LateMinutes { get; init; }
+    public int EarlyLeaveMinutes { get; init; }
+    public int CalculatedOvertimeMinutes { get; init; }
+}
+
+/// <summary>مدخلات حساب راتب موظف واحد في شهر.</summary>
+public sealed class PayrollInputs
+{
+    public decimal BasicSalary { get; init; }
+    public decimal? DailyRateOverride { get; init; }
+    public decimal StandardWorkHours { get; init; } = 8m;
+
+    public int LateMinutes { get; init; }
+    public int RawOvertimeMinutes { get; init; }
+    public int ApprovedOvertimeMinutes { get; init; }
+    public int PaidOvertimeMinutes { get; init; }
+
+    public int AttendanceDays { get; init; }
+    public int PaidRestDays { get; init; }
+    public decimal PaidLeaveDays { get; init; }
+    public decimal UnpaidLeaveDays { get; init; }
+    public decimal AbsenceDays { get; init; }
+
+    public decimal Advances { get; init; }
+
+    /// <summary>خصومات مُسجّلة ومعتمدة (جدول الخصومات).</summary>
+    public decimal DeductionsTotal { get; init; }
+
+    public decimal OtherDeductions { get; init; }
+    public decimal Bonuses { get; init; }
+    public decimal Allowances { get; init; }
+    public decimal AdditionalDays { get; init; }
+    public decimal? AdditionalDaysRate { get; init; }
+
+    public decimal OvertimeMultiplier { get; init; } = 1m;
+
+    /// <summary>أيام الاحتساب كأسماء للتفاصيل.</summary>
+    public string? Notes { get; init; }
+}
+
+/// <summary>نتيجة حساب راتب موظف: كل مكوّن مفصول لوحده لأغراض المراجعة والتدقيق.</summary>
+public sealed record PayrollComputation(
+    decimal BasicSalary,
+    decimal DailyRate,
+    decimal HourlyRate,
+    decimal MinuteRate,
+    int DailyRateBasisDays,
+    int WorkHoursPerDay,
+    int AttendanceDays,
+    int PaidRestDays,
+    decimal PaidLeaveDays,
+    decimal UnpaidLeaveDays,
+    decimal AbsenceDays,
+    int LateMinutes,
+    decimal LateDeduction,
+    int RawOvertimeHours,
+    decimal RawOvertimeHours2,
+    decimal ApprovedOvertimeHours,
+    decimal PaidOvertimeHours,
+    decimal OvertimeMultiplier,
+    decimal OvertimeAmount,
+    decimal AbsenceDeduction,
+    decimal UnpaidLeaveDeduction,
+    decimal Advances,
+    decimal DeductionsTotal,
+    decimal OtherDeductions,
+    decimal Bonuses,
+    decimal Allowances,
+    decimal AdditionalDaysCount,
+    decimal AdditionalDaysAmount,
+    decimal GrossEarnings,
+    decimal TotalDeductions,
+    decimal NetSalary,
+    string CalculationDetails)
+{
+    /// <summary>الإجمالي قبل أي خصم (يحفظ للتوافق مع الحقل القديم).</summary>
+    public decimal GrossSalary => GrossEarnings;
+
+    public static string SerializeDetails(object details) =>
+        JsonSerializer.Serialize(details, new JsonSerializerOptions { WriteIndented = false });
+}
