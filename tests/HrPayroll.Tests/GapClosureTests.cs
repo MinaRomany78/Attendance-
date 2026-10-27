@@ -62,3 +62,4 @@ public sealed class GapClosureTests
         Assert.Equal(2, byDept["اللف"].Count);
         Assert.Equal(2, byDept["اللف"].Select(e => e.JobTitle).Distinct().Count());
     }
+}

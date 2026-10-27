@@ -10,6 +10,7 @@ namespace HrPayroll.Tests;
 /// <summary>
 /// تكامل: استيراد بصمات ثم معالجتها في نفس سياق قاعدة البيانات (نفس الطلب).
 /// </summary>
+
 public class ImportProcessIntegrationTests
 {
     private static byte[] File(params (string code, string time)[] rows)
@@ -50,3 +51,4 @@ public class ImportProcessIntegrationTests
         await processing.ProcessAsync(TestDb.Monday, TestDb.Monday.AddDays(1));
         Assert.Equal(2, await Task.FromResult(ctx.DailyAttendances.Local.Count));
     }
+}
