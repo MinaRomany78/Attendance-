@@ -1,0 +1,153 @@
+@model List<SalaryAdvance>
+@using HrPayroll.Domain.Entities
+@{
+    ViewData["Title"] = "سلفة يوم 15";
+    ViewData["Subtitle"] = "حساب الاستحقاق حتى يوم 15 ثم مراجعة واعتماد ودفع وتسوية مع الراتب";
+    int y = (int)(ViewBag.Year ?? DateTime.Today.Year);
+    int m = (int)(ViewBag.Month ?? DateTime.Today.Month);
+    string StatusText(SalaryAdvanceStatus s) => s switch
+    {
+        SalaryAdvanceStatus.Calculated => "محسوبة",
+        SalaryAdvanceStatus.UnderReview => "قيد المراجعة",
+        SalaryAdvanceStatus.Approved => "معتمدة",
+        SalaryAdvanceStatus.Paid => "مدفوعة",
+        SalaryAdvanceStatus.Settled => "مُسوَّاة",
+        SalaryAdvanceStatus.Cancelled => "ملغاة",
+        _ => s.ToString()
+    };
+    string cls(SalaryAdvanceStatus s) => s switch
+    {
+        SalaryAdvanceStatus.Approved => "ok",
+        SalaryAdvanceStatus.Paid => "ok",
+        SalaryAdvanceStatus.Settled => "muted",
+        SalaryAdvanceStatus.Cancelled => "bad",
+        _ => "warn"
+    };
+}
+<partial name="_BackHome" />
+<div class="page-hero">
+    <div class="page-hero-ico" aria-hidden="true">◐</div>
+    <div class="page-hero-body">
+        <h2>سلفة منتصف الشهر (يوم 15)</h2>
+        <div class="sub">المستحق الفعلي من بداية الشهر حتى تاريخ الاستحقاق — إجمالي المقترح: @(((decimal)(ViewBag.TotalProposed ?? 0m))).ToString("N2") EGP — المعتمد: @(((decimal)(ViewBag.TotalApproved ?? 0m))).ToString("N2") EGP — المدفوع: @(((decimal)(ViewBag.TotalPaid ?? 0m))).ToString("N2") EGP</div>
+    </div>
+</div>
+<div class="card">
+    <div class="card-head">
+        <h2>حساب سلفة جديدة</h2>
+    </div>
+    <div class="card-body">
+        <form method="post" asp-action="Calculate" class="filters">
+            <input type="hidden" name="year" value="@y" />
+            <input type="hidden" name="month" value="@m" />
+            <div class="field">
+                <label>الموظف</label>
+                <select name="employeeId" asp-items="ViewBag.Employees" required>
+                    <option value="">— اختر الموظف —</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>تاريخ الاستحقاق</label>
+                <input type="date" name="cutoff" value="@(new DateTime(y, m, Math.Min(15, DateTime.DaysInMonth(y, m))).ToString("yyyy-MM-dd"))" required />
+            </div>
+            <div class="field actions">
+                <button type="submit" class="btn btn-primary">احسب السلفة</button>
+                <a class="btn btn-ghost" asp-action="ExportExcel" asp-route-year="@y" asp-route-month="@m">تصدير Excel</a>
+            </div>
+        </form>
+        <form method="get" asp-action="Index" class="filters" style="margin-top:12px">
+            <div class="field">
+                <label>السنة</label>
+                <input type="number" name="year" value="@y" />
+            </div>
+            <div class="field">
+                <label>الشهر</label>
+                <input type="number" name="month" value="@m" min="1" max="12" />
+            </div>
+            <div class="field actions">
+                <button type="submit" class="btn btn-soft">عرض الفترة</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div class="card">
+    <div class="card-head"><h3>جدول المراجعة (@Model.Count)</h3></div>
+    @if (Model.Count == 0)
+    {
+        ViewData["message"] = "لا توجد سلف لهذه الفترة";
+        ViewData["hint"] = "احسب سلفة من الحضور الفعلي أعلاه، ثم راجعها واعتمدها قبل الدفع.";
+        ViewData["icon"] = "◐";
+        <partial name="_Empty" />
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data">
+                <thead>
+                <tr>
+                    <th>الموظف</th><th>القسم</th><th>الاستحقاق</th><th>الراتب</th>
+                    <th>حضور</th><th>تأخير (د)</th><th>غياب</th>
+                    <th>المستحق (EGP)</th><th>المقترح (EGP)</th><th>المعتمد (EGP)</th>
+                    <th>المدفوع</th><th>الحالة</th><th>سبب التعديل</th><th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var a in Model)
+                {
+                    <tr>
+                        <td>@a.Employee?.FullName <span class="hint">@a.Employee?.EmployeeCode</span></td>
+                        <td>@(a.Employee?.Department ?? "—")</td>
+                        <td class="num">@a.CutoffDate.ToString("yyyy-MM-dd")</td>
+                        <td class="num money">@a.BasicSalary.ToString("N2")</td>
+                        <td class="num">@a.AttendanceDays يوم (@a.WorkingHours.ToString("N1") س)</td>
+                        <td class="num">@a.LateMinutes <span class="hint">(@a.LateDeduction.ToString("N2"))</span></td>
+                        <td class="num">@a.AbsenceDays <span class="hint">(@a.AbsenceDeduction.ToString("N2"))</span></td>
+                        <td class="num money">@a.EarnedAmount.ToString("N2")</td>
+                        <td class="num money">@a.ProposedAmount.ToString("N2")</td>
+                        <td class="num money">@a.ApprovedAmount.ToString("N2")</td>
+                        <td class="num money">@a.PaidAmount.ToString("N2")</td>
+                        <td><span class="badge @cls(a.Status)">@StatusText(a.Status)</span></td>
+                        <td class="wrap">@(string.IsNullOrWhiteSpace(a.AdjustmentReason) ? "—" : a.AdjustmentReason)</td>
+                        <td class="btn-row">
+                            @if (a.Status is SalaryAdvanceStatus.Calculated or SalaryAdvanceStatus.UnderReview)
+                            {
+                                <form method="post" asp-action="Review" asp-route-id="@a.Id" class="d-inline">
+                                    <input type="hidden" name="year" value="@y" />
+                                    <input type="hidden" name="month" value="@m" />
+                                    <input type="number" name="approvedAmount" value="@a.ApprovedAmount" step="0.01" min="0" style="width:110px" title="المبلغ المعتمد" />
+                                    <input type="text" name="reason" placeholder="سبب التعديل (مطلوب عند الاختلاف)" style="width:170px" />
+                                    <button type="submit" class="btn btn-soft btn-sm">مراجعة</button>
+                                </form>
+                                <form method="post" asp-action="Approve" asp-route-id="@a.Id" class="d-inline">
+                                    <input type="hidden" name="year" value="@y" />
+                                    <input type="hidden" name="month" value="@m" />
+                                    <button type="submit" class="btn btn-ghost btn-sm" data-confirm="اعتماد السلفة بالمبلغ المعتمد؟">اعتماد</button>
+                                </form>
+                            }
+                            @if (a.Status == SalaryAdvanceStatus.Approved)
+                            {
+                                <form method="post" asp-action="MarkPaid" asp-route-id="@a.Id" class="d-inline">
+                                    <input type="hidden" name="year" value="@y" />
+                                    <input type="hidden" name="month" value="@m" />
+                                    <input type="number" name="paidAmount" value="@a.ApprovedAmount" step="0.01" min="0" max="@a.ApprovedAmount" style="width:110px" title="المبلغ المدفوع" />
+                                    <button type="submit" class="btn btn-ghost btn-sm" data-confirm="تسجيل دفع السلفة؟">تسجيل الدفع</button>
+                                </form>
+                            }
+                            @if (a.Status is not (SalaryAdvanceStatus.Paid or SalaryAdvanceStatus.Settled or SalaryAdvanceStatus.Cancelled))
+                            {
+                                <form method="post" asp-action="Cancel" asp-route-id="@a.Id" class="d-inline">
+                                    <input type="hidden" name="year" value="@y" />
+                                    <input type="hidden" name="month" value="@m" />
+                                    <input type="text" name="reason" placeholder="سبب الإلغاء" required style="width:130px" />
+                                    <button type="submit" class="btn btn-ghost btn-sm" data-confirm="إلغاء هذه السلفة؟">إلغاء</button>
+                                </form>
+                            }
+                            @if (a.PayrollItemId.HasValue) { <span class="hint">مُسوَّاة في كشف</span> }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
