@@ -24,7 +24,6 @@ public class DailyReportViewModel
 {
     public AttendanceReportFilter Filter { get; set; } = new();
     public List<DailyAttendanceReportRow> Rows { get; set; } = new();
-    public List<DepartmentReportRow> DepartmentRows { get; set; } = new();
     public List<Department> Departments { get; set; } = new();
     public List<Shift> Shifts { get; set; } = new();
     public List<Employee> Employees { get; set; } = new();
