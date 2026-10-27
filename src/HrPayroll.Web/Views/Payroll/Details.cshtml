@@ -1,0 +1,58 @@
+@using HrPayroll.Infrastructure.Services
+@model HrPayroll.Web.ViewModels.PayrollDetailsViewModel
+@{
+    ViewData["Title"] = $"كشف رواتب {Model.Run.Year}-{Model.Run.Month:00}";
+}
+<div class="card">
+    <div class="card-head">
+        <div>
+            <h2>كشف رواتب @Model.Run.Year-@Model.Run.Month.ToString("00") — إصدار @Model.Run.Version</h2>
+            <div class="sub">الحالة: @ExcelExportService.PayrollStatusText(Model.Run.Status) — محسوب بواسطة @(Model.Run.ComputedBy ?? "-")</div>
+        </div>
+        <div class="btn-row">
+            <a class="btn btn-soft btn-sm" asp-action="ExportExcel" asp-route-id="@Model.Run.Id">Excel</a>
+            <a class="btn btn-soft btn-sm" asp-action="ExportPdf" asp-route-id="@Model.Run.Id">PDF</a>
+            <a class="btn btn-ghost btn-sm" asp-action="Index" asp-route-year="@Model.Run.Year" asp-route-month="@Model.Run.Month">رجوع</a>
+        </div>
+    </div>
+</div>
+<div class="stat-grid">
+    <div class="stat"><div class="label">عدد الموظفين</div><div class="value">@Model.TotalEmployees</div></div>
+    <div class="stat"><div class="label">إجمالي الأساسي</div><div class="value">@Model.TotalBasic.ToString("N2")</div></div>
+    <div class="stat"><div class="label">إجمالي الإضافي</div><div class="value">@Model.TotalOvertime.ToString("N2")</div></div>
+    <div class="stat"><div class="label">مكافآت وبدلات وأيام إضافية</div><div class="value">@Model.TotalBonuses.ToString("N2")</div></div>
+    <div class="stat bad"><div class="label">إجمالي الخصومات</div><div class="value">@Model.TotalDeductions.ToString("N2")</div></div>
+    <div class="stat ok"><div class="label">الصافي</div><div class="value">@Model.TotalNet.ToString("N2")</div></div>
+</div>
+<div class="card">
+    <div class="card-head"><h3>تفاصيل الموظفين</h3></div>
+    <div class="table-wrap">
+        <table class="data">
+            <thead>
+            <tr>
+                <th>كود</th><th>الاسم</th><th>القسم</th><th>الأساسي</th><th>الأجر اليومي</th><th>أجر الساعة</th>
+                <th>إضافي معتمد</th><th>قيمة الإضافي</th><th>إجمالي الاستحقاقات</th><th>إجمالي الخصومات</th><th>الصافي</th><th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var r in Model.Rows)
+            {
+                <tr>
+                    <td class="num">@r.EmployeeCode</td>
+                    <td>@r.EmployeeName</td>
+                    <td>@(r.Department ?? "-")</td>
+                    <td class="money">@r.BasicSalary.ToString("N2")</td>
+                    <td class="money">@r.DailyRate.ToString("N2")</td>
+                    <td class="money">@r.HourlyRate.ToString("N2")</td>
+                    <td class="num">@r.ApprovedOvertimeHours</td>
+                    <td class="money">@r.OvertimeAmount.ToString("N2")</td>
+                    <td class="money">@r.GrossEarnings.ToString("N2")</td>
+                    <td class="money">@r.TotalDeductions.ToString("N2")</td>
+                    <td class="money">@r.NetSalary.ToString("N2")</td>
+                    <td><a class="btn btn-soft btn-sm" asp-action="Payslip" asp-route-id="@r.PayrollItemId">كشف الراتب</a></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

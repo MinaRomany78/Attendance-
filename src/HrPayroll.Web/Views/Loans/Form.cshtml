@@ -1,0 +1,64 @@
+@model Loan
+@{
+    var isEdit = Model.Id > 0;
+    ViewData["Title"] = isEdit ? "تعديل سلفة" : "تسجيل سلفة";
+}
+<div class="card">
+    <div class="card-head">
+        <div>
+            <h2>@ViewData["Title"]</h2>
+            <div class="sub">تُخصم السلفة المعتمدة من صافي الراتب في شهر الخصم المحدد مرة واحدة فقط.</div>
+        </div>
+        <a class="btn btn-ghost btn-sm" asp-action="Index">رجوع للقائمة</a>
+    </div>
+    <div class="card-body">
+        <form method="post" asp-action="@(isEdit ? "Edit" : "Create")" asp-route-id="@Model.Id">
+            <input type="hidden" asp-for="Id" />
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger"
+                 style="display:@(ViewData.ModelState.ErrorCount > 0 ? "flex" : "none")"></div>
+            <div class="form-grid">
+                <div class="field span-2">
+                    <label asp-for="EmployeeId">الموظف</label>
+                    <select asp-for="EmployeeId" asp-items="ViewBag.Employees">
+                        <option value="">— اختر الموظف —</option>
+                    </select>
+                    <span asp-validation-for="EmployeeId" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Amount">المبلغ</label>
+                    <input asp-for="Amount" type="number" step="0.01" min="0" />
+                    <span asp-validation-for="Amount" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="LoanDate">تاريخ السلفة</label>
+                    <input asp-for="LoanDate" type="date" />
+                    <span asp-validation-for="LoanDate" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="DeductionMonth">شهر الخصم</label>
+                    <input asp-for="DeductionMonth" type="number" min="1" max="12" />
+                    <span asp-validation-for="DeductionMonth" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="DeductionYear">سنة الخصم</label>
+                    <input asp-for="DeductionYear" type="number" />
+                    <span asp-validation-for="DeductionYear" class="field-error"></span>
+                </div>
+                <div class="field">
+                    <label asp-for="Installments">عدد الأقساط</label>
+                    <input asp-for="Installments" type="number" min="1" />
+                    <span asp-validation-for="Installments" class="field-error"></span>
+                </div>
+                <div class="field span-2">
+                    <label asp-for="Notes">ملاحظات</label>
+                    <textarea asp-for="Notes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="btn-row" style="margin-top:20px">
+                <button type="submit" class="btn btn-primary btn-lg">@(isEdit ? "حفظ التعديلات" : "تسجيل السلفة")</button>
+                <a class="btn btn-ghost btn-lg" asp-action="Index">إلغاء</a>
+            </div>
+        </form>
+    </div>
+</div>
+@section Scripts { <partial name="_ValidationScriptsPartial" /> }
