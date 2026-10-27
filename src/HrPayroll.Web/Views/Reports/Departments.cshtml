@@ -14,6 +14,7 @@
         ["search"] = f.Search ?? string.Empty
     };
 }
+
 <div class="card">
     <div class="card-head">
         <div>
@@ -76,6 +77,7 @@
         </form>
     </div>
 </div>
+
 <div class="stat-grid">
     <div class="stat"><div class="label">🏢 الأقسام</div><div class="value">@Model.DepartmentCount</div></div>
     <div class="stat"><div class="label">🧩 مجموعات المسميات</div><div class="value">@Model.JobTitleGroups</div></div>
@@ -84,6 +86,7 @@
     <div class="stat bad"><div class="label">🚫 غائبون</div><div class="value">@Model.TotalAbsent</div></div>
     <div class="stat warn"><div class="label">⏰ متأخرون</div><div class="value">@Model.TotalLate</div></div>
 </div>
+
 @if (Model.Rows.Count == 0)
 {
     ViewData["message"] = "لا توجد بيانات حضور للفترة أو المرشحات المحددة";
@@ -113,6 +116,7 @@ else
                     <span class="kpi">إجمالي الموظفين: <b>@d.TotalEmployees</b></span>
                 </div>
             </div>
+
             <div class="jt-table">
                 <div class="jt-row jt-thead" role="row">
                     <span class="jt-name">المسمى الوظيفي</span>
@@ -123,6 +127,7 @@ else
                     <span class="num">إجازات</span>
                     <span class="jt-act no-print">الأسماء</span>
                 </div>
+
                 @foreach (var jt in d.JobTitles)
                 {
                     <details class="jt-group">
@@ -135,6 +140,7 @@ else
                             <span class="num">@jt.OnLeaveEmployees</span>
                             <span class="jt-act">عرض الأسماء (@jt.EmployeeCount)</span>
                         </summary>
+
                         <div class="jt-emps">
                             <table class="data">
                                 <thead>
