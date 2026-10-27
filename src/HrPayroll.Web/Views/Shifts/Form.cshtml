@@ -15,6 +15,7 @@
         <form method="post" asp-action="@(isEdit ? "Edit" : "Create")" asp-route-id="@(isEdit ? Model.Id : (int?)null)">
             <input type="hidden" asp-for="Id" />
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" style="display:@(ViewData.ModelState.ErrorCount > 0 ? "flex" : "none")"></div>
+
             <div class="form-grid">
                 <div class="field span-2">
                     <label asp-for="ShiftName">اسم الوردية</label>
@@ -59,6 +60,7 @@
                     </select>
                 </div>
             </div>
+
             <div class="section-title">أيام عمل الوردية</div>
             <div class="btn-row">
                 @for (var d = 0; d <= 6; d++)
@@ -71,8 +73,10 @@
                 }
             </div>
             <input type="hidden" asp-for="WorkingDays" id="workingDaysHidden" />
+
             <div class="section-title">ملاحظات</div>
             <textarea asp-for="Notes" rows="2"></textarea>
+
             <div class="btn-row" style="margin-top:18px">
                 <button type="submit" class="btn btn-primary btn-lg">حفظ الوردية</button>
                 <a class="btn btn-ghost btn-lg" asp-action="Index">إلغاء</a>
@@ -80,6 +84,7 @@
         </form>
     </div>
 </div>
+
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
     <script>
