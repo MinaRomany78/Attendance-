@@ -260,7 +260,7 @@ public class PayrollSheetEditTests
         Assert.Equal(50m, after.ApprovedOvertimeHours);
         Assert.Equal(1875m, after.OvertimeAmount);      // 50 × 37.50 (بدون 1.5 أو 2)
         Assert.Equal(1m, after.OvertimeMultiplier);
-        Assert.Equal(9375m, after.NetSalary);           // 9000 + 1875 − 1500
+        Assert.Equal(9375m, after.NetSalary);            // 9000 + 1875 − 1500
     }
 
     [Fact]
@@ -434,3 +434,4 @@ public class PayrollSheetEditTests
         var emp = await ctx.Employees.SingleAsync(e => e.Id == 1);
         Assert.Equal(21m, emp.AnnualLeaveBalance);
     }
+}
