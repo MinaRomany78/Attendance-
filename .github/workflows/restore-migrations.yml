@@ -1,0 +1,54 @@
+name: restore-migrations
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch upstream migration sources
+        run: |
+          set -euo pipefail
+          d=src/HrPayroll.Infrastructure/Persistence/Migrations
+          if [ -f "$d/20261027093747_HrUpgrade_Advances_Expenses_Repayments.cs" ]; then
+            echo "already restored"; exit 0
+          fi
+          mkdir -p "$d"
+          base=https://raw.githubusercontent.com/beboatef/Attendance/main/src/HrPayroll.Infrastructure/Persistence/Migrations
+          for f in 20261012085017_InitialCreate.cs 20261012085017_InitialCreate.Designer.cs 20261013064441_HrUpgrade_Employees_Shifts_Attendance_Payroll.cs 20261013064441_HrUpgrade_Employees_Shifts_Attendance_Payroll.Designer.cs 20261013130424_PayrollSheetEditing_LeaveBalances.cs 20261013130424_PayrollSheetEditing_LeaveBalances.Designer.cs AppDbContextModelSnapshot.cs; do
+            curl -fsSL "$base/$f" -o "$d/$f"
+          done
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Generate newest migration and snapshot
+        run: |
+          set -euo pipefail
+          dotnet tool install --global dotnet-ef --version 9.0.20
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet restore HrPayroll.sln
+          dotnet ef migrations add TempSync --project src/HrPayroll.Infrastructure --startup-project src/HrPayroll.Web --output-dir Persistence/Migrations
+          d=src/HrPayroll.Infrastructure/Persistence/Migrations
+          for f in "$d"/*_TempSync.cs; do
+            ts=$(basename "$f" | cut -d_ -f1)
+            sed "s/TempSync/HrUpgrade_Advances_Expenses_Repayments/g; s/$ts/20261027093747/g" "$f" > "$d/20261027093747_HrUpgrade_Advances_Expenses_Repayments.cs"
+            rm "$f"
+          done
+          for f in "$d"/*_TempSync.Designer.cs; do
+            ts=$(basename "$f" | cut -d_ -f1)
+            sed "s/TempSync/HrUpgrade_Advances_Expenses_Repayments/g; s/$ts/20261027093747/g" "$f" > "$d/20261027093747_HrUpgrade_Advances_Expenses_Repayments.Designer.cs"
+            rm "$f"
+          done
+          dotnet ef migrations list --project src/HrPayroll.Infrastructure --startup-project src/HrPayroll.Web --no-connect | tail -10
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          git config user.name "audit-bot"
+          git config user.email "audit-bot@users.noreply.github.com"
+          git rm -q .github/workflows/restore-migrations.yml
+          git add -A
+          git commit -m "Restore complete EF Core migration chain and model snapshot"
+          git push origin HEAD:main
