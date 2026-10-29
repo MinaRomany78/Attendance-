@@ -15,6 +15,12 @@ namespace HrPayroll.Infrastructure.Services;
 /// </summary>
 public class SalaryAdvanceService
 {
+    /// <summary>
+    /// آخر يوم مسموح لاستحقاق سلفة منتصف الشهر. يوم 15 نفسه مسموح،
+    /// وأي تاريخ استحقاق بعد 15 مرفوض (سياسة الشركة المعتمدة).
+    /// </summary>
+    public const int CutoffDay = 15;
+
     private readonly AppDbContext _db;
     private readonly SettingsService _settings;
     private readonly AuditService _audit;
@@ -36,8 +42,15 @@ public class SalaryAdvanceService
     public async Task<SalaryAdvance> CalculateAsync(int employeeId, int year, int month, DateTime cutoff,
         string? user = null, string? userId = null, CancellationToken ct = default)
     {
-        if (cutoff.Day < 1 || cutoff.Day > 28)
-            throw new ArgumentOutOfRangeException(nameof(cutoff), "تاريخ الاستحقاق يجب أن يكون داخل الشهر (1 - 28).");
+        // سياسة الأهلية: السلفة تُحتسب من أول الشهر حتى يوم 15 (يوم 15 مسموح).
+        // نرفض أي تاريخ خارج شهر السلفة أو بعد يوم 15 قبل أي قراءة/كتابة في قاعدة البيانات.
+        if (cutoff.Year != year || cutoff.Month != month)
+            throw new InvalidOperationException(
+                $"تاريخ الاستحقاق ({cutoff:yyyy-MM-dd}) يجب أن يكون داخل شهر السلفة {year}-{month:00}.");
+        if (cutoff.Day > CutoffDay)
+            throw new InvalidOperationException(
+                $"أهلية سلفة منتصف الشهر تنتهي يوم {CutoffDay} من الشهر؛ " +
+                $"لا يمكن حساب سلفة بتاريخ استحقاق {cutoff:dd/MM/yyyy}.");
 
         var emp = await _db.Employees.FirstOrDefaultAsync(e => e.Id == employeeId, ct)
             ?? throw new InvalidOperationException("الموظف غير موجود.");
@@ -208,6 +221,9 @@ public class SalaryAdvanceService
         if (string.IsNullOrWhiteSpace(reason)) throw new InvalidOperationException("سبب الإلغاء مطلوب.");
         var advance = await _db.SalaryAdvances.FirstOrDefaultAsync(a => a.Id == id, ct)
             ?? throw new InvalidOperationException("السلفة غير موجودة.");
+        if (advance.Status == SalaryAdvanceStatus.Paid)
+            throw new InvalidOperationException(
+                "لا يمكن إلغاء سلفة مدفوعة. سجّل استردادًا أو تسوية معتمدة بدل إلغاء عملية صُرف فيها مبلغ فعلي.");
         if (advance.IsSettled)
             throw new InvalidOperationException("لا يمكن إلغاء سلفة مُسوَّاة في كشف رواتب. استخدم دورة التصحيح المعتمدة.");
         var old = advance.Status.ToString();

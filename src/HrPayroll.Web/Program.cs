@@ -150,11 +150,33 @@ using (var scope = app.Services.CreateScope())
     }
     else
     {
+        var db = services.GetRequiredService<AppDbContext>();
         try
         {
-            var db = services.GetRequiredService<AppDbContext>();
+            var pendingBefore = db.Database.GetPendingMigrations().ToList();
+            if (pendingBefore.Count > 0)
+            {
+                // تُذكر أسماء الترحيلات فقط — لا بيانات اعتماد ولا محتوى جداول.
+                logger.LogWarning("ترحيلات قاعدة بيانات معلّقة ({Count}): {Migrations}",
+                    pendingBefore.Count, string.Join(", ", pendingBefore));
+            }
+
             // Migrate تُطبّق الترحيلات الناقصة فقط: لا تُعيد إنشاء قاعدة موجودة ولا تحذف أي جدول.
             db.Database.Migrate();
+
+            // تحقّق إضافي: إن بقيت ترحيلات معلّقة بعد Migrate فالسبب عادةً صلاحيات على قاعدة البيانات.
+            // لا نكمل الخدمة بمخطط قديم لأن ذلك يظهر للمستخدم كـ
+            // "Invalid object name 'SalaryAdvances'" أو "Invalid column name 'InstallmentAmount'"
+            // بدل رسالة واضحة للمسؤول.
+            var pendingAfter = db.Database.GetPendingMigrations().ToList();
+            if (pendingAfter.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "لم تُطبَّق كل ترحيلات قاعدة البيانات. المتبقي: " + string.Join(", ", pendingAfter));
+            }
+
+            logger.LogInformation("مخطط قاعدة البيانات مطابق للترحيلات ({Applied} ترحيلًا مطبّقًا).",
+                db.Database.GetAppliedMigrations().Count());
 
             // بيانات أول مسؤول تأتي من الإعدادات فقط (متغيّر بيئة أو User Secrets أو ملف غير مُتتبَّع)،
             // ولا تُوجود أي كلمة مرور افتراضية في الكود أو المستودع.
@@ -174,7 +196,17 @@ using (var scope = app.Services.CreateScope())
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "تعذّر تهيئة قاعدة البيانات. تحقق من Connection String وشغّل الترحيلات.");
+            logger.LogCritical(ex,
+                "فشل تهيئة قاعدة البيانات. لن يبدأ التطبيق بمخطط قديم. " +
+                "طبّق الترحيلات يدويًا: dotnet ef database update -p src/HrPayroll.Infrastructure -s src/HrPayroll.Web");
+
+            // الإيقاف الفوري هو السلوك الافتراضي: تشغيل التطبيق على مخطط قديم يُنتج أخطاء
+            // "Invalid object name / Invalid column name" في صفحات حقيقية بدل خطأ واضح للمسؤول.
+            if (builder.Configuration.GetValue("Database:FailFastOnStartupError", true))
+                throw;
+
+            logger.LogWarning(
+                "تم تعطيل الإيقاف عند فشل التهيئة (Database:FailFastOnStartupError=false) — بعض الصفحات قد تفشل.");
         }
     }
 }
