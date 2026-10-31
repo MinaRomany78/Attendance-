@@ -4,19 +4,16 @@ using HrPayroll.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace HrPayroll.Infrastructure.Persistence.Migrations
+namespace HrPayroll.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261013064441_HrUpgrade_Employees_Shifts_Attendance_Payroll")]
-    partial class HrUpgrade_Employees_Shifts_Attendance_Payroll
+    partial class AppDbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -588,6 +585,9 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("AnnualLeaveBalance")
                         .HasColumnType("decimal(6,2)");
 
+                    b.Property<decimal>("AnnualLeaveCarriedOver")
+                        .HasColumnType("decimal(6,2)");
+
                     b.Property<decimal>("AnnualLeaveEntitlement")
                         .HasColumnType("decimal(6,2)");
 
@@ -693,6 +693,95 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.HasIndex("ShiftId");
 
                     b.ToTable("Employees", (string)null);
+                });
+
+            modelBuilder.Entity("HrPayroll.Domain.Entities.EmployeeExpense", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ExpenseDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("PayrollItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReceiptReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("SalaryAdvanceId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SettlementMode")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollItemId");
+
+                    b.HasIndex("SalaryAdvanceId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("EmployeeId", "Year", "Month");
+
+                    b.ToTable("EmployeeExpenses", (string)null);
                 });
 
             modelBuilder.Entity("HrPayroll.Domain.Entities.EmployeeShiftAssignment", b =>
@@ -963,8 +1052,14 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
 
+                    b.Property<decimal>("InstallmentAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("Installments")
                         .HasColumnType("int");
+
+                    b.Property<bool>("IsPaused")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime>("LoanDate")
                         .HasColumnType("datetime2");
@@ -973,7 +1068,19 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<decimal>("OutstandingBalance")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PaidAmount")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int?>("PayrollItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RepaymentStartMonth")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RepaymentStartYear")
                         .HasColumnType("int");
 
                     b.Property<int>("Status")
@@ -992,6 +1099,66 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.HasIndex("EmployeeId", "DeductionYear", "DeductionMonth");
 
                     b.ToTable("Loans", (string)null);
+                });
+
+            modelBuilder.Entity("HrPayroll.Domain.Entities.LoanRepayment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("DueAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LoanId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("PaidAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("PayrollItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollItemId");
+
+                    b.HasIndex("EmployeeId", "Year", "Month");
+
+                    b.HasIndex("LoanId", "Year", "Month")
+                        .IsUnique();
+
+                    b.ToTable("LoanRepayments", (string)null);
                 });
 
             modelBuilder.Entity("HrPayroll.Domain.Entities.OvertimeApproval", b =>
@@ -1149,8 +1316,17 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("AdditionalDaysCount")
                         .HasColumnType("decimal(6,2)");
 
+                    b.Property<decimal?>("AdditionalDaysRate")
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<decimal>("Allowances")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("AnnualLeaveBalanceApplied")
+                        .HasColumnType("decimal(6,2)");
+
+                    b.Property<decimal>("AnnualLeaveDays")
+                        .HasColumnType("decimal(6,2)");
 
                     b.Property<decimal>("ApprovedOvertimeHours")
                         .HasColumnType("decimal(18,2)");
@@ -1208,9 +1384,19 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.Property<decimal>("HourlyRate")
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<bool>("IsManuallyAdjusted")
+                        .HasColumnType("bit");
+
                     b.Property<string>("JobTitleName")
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime?>("LastEditedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastEditedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<decimal>("LateDeduction")
                         .HasColumnType("decimal(18,2)");
@@ -1219,6 +1405,9 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                         .HasColumnType("int");
 
                     b.Property<decimal>("LoansTotal")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ManualOvertimeHours")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("MinuteRate")
@@ -1230,6 +1419,9 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("OriginalAbsenceDays")
+                        .HasColumnType("decimal(6,2)");
 
                     b.Property<decimal>("OtherDeductions")
                         .HasColumnType("decimal(18,2)");
@@ -1508,6 +1700,120 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.ToTable("RawPunches", (string)null);
                 });
 
+            modelBuilder.Entity("HrPayroll.Domain.Entities.SalaryAdvance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("AbsenceDays")
+                        .HasColumnType("decimal(6,2)");
+
+                    b.Property<decimal>("AbsenceDeduction")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("AdjustmentReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("ApprovedAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("ApprovedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ApprovedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("AttendanceDays")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("BasicSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Bonuses")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CutoffDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("EarnedAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("IncludedExpenses")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("LateDeduction")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("LateMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<decimal>("OvertimeAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("PaidAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PaidBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("PayrollItemId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("ProposedAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal>("WorkingHours")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollItemId");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("EmployeeId", "Year", "Month")
+                        .IsUnique();
+
+                    b.ToTable("SalaryAdvances", (string)null);
+                });
+
             modelBuilder.Entity("HrPayroll.Domain.Entities.Shift", b =>
                 {
                     b.Property<int>("Id")
@@ -1770,7 +2076,7 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.HasOne("HrPayroll.Domain.Entities.LeaveRequest", "LeaveRequest")
                         .WithMany()
                         .HasForeignKey("LeaveRequestId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("HrPayroll.Domain.Entities.Shift", "Shift")
                         .WithMany()
@@ -1826,6 +2132,31 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.Navigation("JobTitleRef");
 
                     b.Navigation("Shift");
+                });
+
+            modelBuilder.Entity("HrPayroll.Domain.Entities.EmployeeExpense", b =>
+                {
+                    b.HasOne("HrPayroll.Domain.Entities.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HrPayroll.Domain.Entities.PayrollItem", "PayrollItem")
+                        .WithMany()
+                        .HasForeignKey("PayrollItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HrPayroll.Domain.Entities.SalaryAdvance", "SalaryAdvance")
+                        .WithMany("LinkedExpenses")
+                        .HasForeignKey("SalaryAdvanceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("PayrollItem");
+
+                    b.Navigation("SalaryAdvance");
                 });
 
             modelBuilder.Entity("HrPayroll.Domain.Entities.EmployeeShiftAssignment", b =>
@@ -1889,6 +2220,32 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Employee");
+
+                    b.Navigation("PayrollItem");
+                });
+
+            modelBuilder.Entity("HrPayroll.Domain.Entities.LoanRepayment", b =>
+                {
+                    b.HasOne("HrPayroll.Domain.Entities.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("HrPayroll.Domain.Entities.Loan", "Loan")
+                        .WithMany("Repayments")
+                        .HasForeignKey("LoanId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HrPayroll.Domain.Entities.PayrollItem", "PayrollItem")
+                        .WithMany()
+                        .HasForeignKey("PayrollItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Loan");
 
                     b.Navigation("PayrollItem");
                 });
@@ -1963,6 +2320,24 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("ImportBatch");
+                });
+
+            modelBuilder.Entity("HrPayroll.Domain.Entities.SalaryAdvance", b =>
+                {
+                    b.HasOne("HrPayroll.Domain.Entities.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HrPayroll.Domain.Entities.PayrollItem", "PayrollItem")
+                        .WithMany()
+                        .HasForeignKey("PayrollItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("PayrollItem");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -2063,6 +2438,11 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     b.Navigation("Employees");
                 });
 
+            modelBuilder.Entity("HrPayroll.Domain.Entities.Loan", b =>
+                {
+                    b.Navigation("Repayments");
+                });
+
             modelBuilder.Entity("HrPayroll.Domain.Entities.PayrollItem", b =>
                 {
                     b.Navigation("Adjustments");
@@ -2084,6 +2464,11 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("HrPayroll.Domain.Entities.RawPunch", b =>
                 {
                     b.Navigation("AttendanceEvent");
+                });
+
+            modelBuilder.Entity("HrPayroll.Domain.Entities.SalaryAdvance", b =>
+                {
+                    b.Navigation("LinkedExpenses");
                 });
 
             modelBuilder.Entity("HrPayroll.Domain.Entities.Shift", b =>

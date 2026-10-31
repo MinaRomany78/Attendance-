@@ -9,11 +9,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
 
-namespace HrPayroll.Infrastructure.Persistence.Migrations
+namespace HrPayroll.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20261027093747_HrUpgrade_Advances_Expenses_Repayments")]
-    partial class HrUpgrade_Advances_Expenses_Repayments
+    [Migration("20261031101003_initalCreate")]
+    partial class initalCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
