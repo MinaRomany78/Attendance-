@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace HrPayroll.Infrastructure.Persistence.Migrations
+namespace HrPayroll.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class initalCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -100,6 +100,28 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "Departments",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    Code = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    ManagerName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    SortOrder = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Departments", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "ImportBatches",
                 columns: table => new
                 {
@@ -140,9 +162,16 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     ComputedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
                     ApprovedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
                     ApprovedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    LockedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    LockedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    ReopenedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ReopenedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    ReopenReason = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
                     TotalNet = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     TotalOvertime = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     TotalDeductions = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    TotalGross = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    TotalBonuses = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
                     Version = table.Column<int>(type: "int", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -156,15 +185,41 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "PublicHolidays",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    HolidayDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    IsPaid = table.Column<bool>(type: "bit", nullable: false),
+                    AllowWorkWithExtraPay = table.Column<bool>(type: "bit", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PublicHolidays", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Shifts",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
                     ShiftName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    ShiftNumber = table.Column<int>(type: "int", nullable: false),
                     StartTime = table.Column<TimeSpan>(type: "time", nullable: false),
                     EndTime = table.Column<TimeSpan>(type: "time", nullable: false),
-                    GraceMinutes = table.Column<int>(type: "int", nullable: false),
+                    StandardHours = table.Column<decimal>(type: "decimal(5,2)", nullable: false),
+                    EntryGraceMinutes = table.Column<int>(type: "int", nullable: false),
+                    ExitGraceMinutes = table.Column<int>(type: "int", nullable: false),
+                    WorkingDays = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     IsOvernight = table.Column<bool>(type: "bit", nullable: false),
                     OvertimeMultiplier = table.Column<decimal>(type: "decimal(18,4)", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
@@ -287,6 +342,34 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "JobTitles",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    Code = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    DepartmentId = table.Column<int>(type: "int", nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    SortOrder = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_JobTitles", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_JobTitles_Departments_DepartmentId",
+                        column: x => x.DepartmentId,
+                        principalTable: "Departments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Employees",
                 columns: table => new
                 {
@@ -297,13 +380,22 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     FullName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     JobTitle = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
                     Department = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    DepartmentId = table.Column<int>(type: "int", nullable: true),
+                    JobTitleId = table.Column<int>(type: "int", nullable: true),
                     ShiftId = table.Column<int>(type: "int", nullable: true),
                     BasicSalary = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    DailyRate = table.Column<decimal>(type: "decimal(18,4)", nullable: true),
+                    StandardWorkHours = table.Column<decimal>(type: "decimal(5,2)", nullable: false),
+                    AnnualLeaveEntitlement = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    AnnualLeaveCarriedOver = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    AnnualLeaveBalance = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
                     HireDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    EmploymentStatus = table.Column<int>(type: "int", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),
                     TerminationDate = table.Column<DateTime>(type: "datetime2", nullable: true),
                     Email = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
                     Phone = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    ContactInfo = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     NationalId = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
                     Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
@@ -315,58 +407,23 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_Employees", x => x.Id);
                     table.ForeignKey(
+                        name: "FK_Employees_Departments_DepartmentId",
+                        column: x => x.DepartmentId,
+                        principalTable: "Departments",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_Employees_JobTitles_JobTitleId",
+                        column: x => x.JobTitleId,
+                        principalTable: "JobTitles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
                         name: "FK_Employees_Shifts_ShiftId",
                         column: x => x.ShiftId,
                         principalTable: "Shifts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "DailyAttendances",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    EmployeeId = table.Column<int>(type: "int", nullable: false),
-                    WorkDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    ShiftId = table.Column<int>(type: "int", nullable: true),
-                    ShiftStart = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    ShiftEnd = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CheckInTime = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    CheckOutTime = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    LateMinutes = table.Column<int>(type: "int", nullable: false),
-                    EarlyLeaveMinutes = table.Column<int>(type: "int", nullable: false),
-                    CalculatedOvertimeMinutes = table.Column<int>(type: "int", nullable: false),
-                    ApprovedOvertimeMinutes = table.Column<int>(type: "int", nullable: false),
-                    Status = table.Column<int>(type: "int", nullable: false),
-                    PunchReviewStatus = table.Column<int>(type: "int", nullable: false),
-                    HasIncompletePunches = table.Column<bool>(type: "bit", nullable: false),
-                    IsManualOverride = table.Column<bool>(type: "bit", nullable: false),
-                    EntryEventId = table.Column<int>(type: "int", nullable: true),
-                    ExitEventId = table.Column<int>(type: "int", nullable: true),
-                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
-                    AdminNotes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DailyAttendances", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_DailyAttendances_Employees_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employees",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_DailyAttendances_Shifts_ShiftId",
-                        column: x => x.ShiftId,
-                        principalTable: "Shifts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -404,37 +461,6 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "LeaveRequests",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "int", nullable: false)
-                        .Annotation("SqlServer:Identity", "1, 1"),
-                    EmployeeId = table.Column<int>(type: "int", nullable: false),
-                    StartDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    EndDate = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    LeaveType = table.Column<int>(type: "int", nullable: false),
-                    Status = table.Column<int>(type: "int", nullable: false),
-                    Reason = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
-                    ApprovedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
-                    ApprovedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    IsPaid = table.Column<bool>(type: "bit", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_LeaveRequests", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_LeaveRequests_Employees_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employees",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "PayrollItems",
                 columns: table => new
                 {
@@ -444,20 +470,51 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     EmployeeId = table.Column<int>(type: "int", nullable: false),
                     EmployeeCode = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
                     EmployeeName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    DepartmentName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    JobTitleName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
                     BasicSalary = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    LateMinutes = table.Column<int>(type: "int", nullable: false),
-                    LateDeduction = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    DailyRate = table.Column<decimal>(type: "decimal(18,4)", nullable: false),
+                    HourlyRate = table.Column<decimal>(type: "decimal(18,4)", nullable: false),
                     MinuteRate = table.Column<decimal>(type: "decimal(18,8)", nullable: false),
+                    DailyRateBasisDays = table.Column<int>(type: "int", nullable: false),
+                    WorkHoursPerDay = table.Column<int>(type: "int", nullable: false),
+                    AttendanceDays = table.Column<int>(type: "int", nullable: false),
+                    PaidRestDays = table.Column<int>(type: "int", nullable: false),
+                    PaidLeaveDays = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    UnpaidLeaveDays = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    AbsenceDays = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    OriginalAbsenceDays = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    AnnualLeaveDays = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    AnnualLeaveBalanceApplied = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    LateMinutes = table.Column<int>(type: "int", nullable: false),
+                    RawOvertimeMinutes = table.Column<int>(type: "int", nullable: false),
+                    RawOvertimeHours = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     ApprovedOvertimeHours = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    PaidOvertimeHours = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     OvertimeMultiplier = table.Column<decimal>(type: "decimal(18,4)", nullable: false),
                     OvertimeValue = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    ManualOvertimeHours = table.Column<decimal>(type: "decimal(18,2)", nullable: true),
+                    LateDeduction = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    AbsenceDeduction = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    UnpaidLeaveDeduction = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     LoansTotal = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     DeductionsTotal = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     OtherDeductions = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    GrossSalary = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Bonuses = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Allowances = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    AdditionalDaysCount = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    AdditionalDaysRate = table.Column<decimal>(type: "decimal(18,4)", nullable: true),
+                    AdditionalDaysAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    GrossEarnings = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    TotalDeductions = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     NetSalary = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    GrossSalary = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
                     Status = table.Column<int>(type: "int", nullable: false),
                     Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    IsManuallyAdjusted = table.Column<bool>(type: "bit", nullable: false),
+                    LastEditedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    LastEditedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    CalculationDetails = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
@@ -559,6 +616,47 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "LeaveRequests",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    EmployeeId = table.Column<int>(type: "int", nullable: false),
+                    StartDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    EndDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    LeaveType = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    Reason = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    ApprovedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    IsPaid = table.Column<bool>(type: "bit", nullable: false),
+                    DaysCount = table.Column<int>(type: "int", nullable: false),
+                    WorkingDays = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    CreatedFromAbsence = table.Column<bool>(type: "bit", nullable: false),
+                    PayrollItemId = table.Column<int>(type: "int", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LeaveRequests", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LeaveRequests_Employees_EmployeeId",
+                        column: x => x.EmployeeId,
+                        principalTable: "Employees",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_LeaveRequests_PayrollItems_PayrollItemId",
+                        column: x => x.PayrollItemId,
+                        principalTable: "PayrollItems",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Loans",
                 columns: table => new
                 {
@@ -572,6 +670,12 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                     Installments = table.Column<int>(type: "int", nullable: false),
                     Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
                     Status = table.Column<int>(type: "int", nullable: false),
+                    InstallmentAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    PaidAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    OutstandingBalance = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    RepaymentStartMonth = table.Column<int>(type: "int", nullable: false),
+                    RepaymentStartYear = table.Column<int>(type: "int", nullable: false),
+                    IsPaused = table.Column<bool>(type: "bit", nullable: false),
                     PayrollItemId = table.Column<int>(type: "int", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
@@ -635,6 +739,101 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "PayrollAdjustments",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    EmployeeId = table.Column<int>(type: "int", nullable: false),
+                    Month = table.Column<int>(type: "int", nullable: false),
+                    Year = table.Column<int>(type: "int", nullable: false),
+                    Type = table.Column<int>(type: "int", nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Days = table.Column<decimal>(type: "decimal(6,2)", nullable: true),
+                    DailyRateOverride = table.Column<decimal>(type: "decimal(18,4)", nullable: true),
+                    ReferenceDate = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ApprovedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    PayrollItemId = table.Column<int>(type: "int", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PayrollAdjustments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_PayrollAdjustments_Employees_EmployeeId",
+                        column: x => x.EmployeeId,
+                        principalTable: "Employees",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_PayrollAdjustments_PayrollItems_PayrollItemId",
+                        column: x => x.PayrollItemId,
+                        principalTable: "PayrollItems",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SalaryAdvances",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    EmployeeId = table.Column<int>(type: "int", nullable: false),
+                    Year = table.Column<int>(type: "int", nullable: false),
+                    Month = table.Column<int>(type: "int", nullable: false),
+                    CutoffDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    BasicSalary = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    EarnedAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    AttendanceDays = table.Column<int>(type: "int", nullable: false),
+                    WorkingHours = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    LateMinutes = table.Column<int>(type: "int", nullable: false),
+                    LateDeduction = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    AbsenceDays = table.Column<decimal>(type: "decimal(6,2)", nullable: false),
+                    AbsenceDeduction = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    OvertimeAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Bonuses = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    IncludedExpenses = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    ProposedAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    ApprovedAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    PaidAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    AdjustmentReason = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    ApprovedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    PaidBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    PaidAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    PayrollItemId = table.Column<int>(type: "int", nullable: true),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SalaryAdvances", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_SalaryAdvances_Employees_EmployeeId",
+                        column: x => x.EmployeeId,
+                        principalTable: "Employees",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_SalaryAdvances_PayrollItems_PayrollItemId",
+                        column: x => x.PayrollItemId,
+                        principalTable: "PayrollItems",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "AttendanceEvents",
                 columns: table => new
                 {
@@ -677,6 +876,201 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                         principalTable: "Shifts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.SetNull);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "DailyAttendances",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    EmployeeId = table.Column<int>(type: "int", nullable: false),
+                    WorkDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ShiftId = table.Column<int>(type: "int", nullable: true),
+                    DetectionSource = table.Column<int>(type: "int", nullable: false),
+                    NeedsReviewReason = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    ShiftStart = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ShiftEnd = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CheckInTime = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CheckOutTime = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    LateMinutes = table.Column<int>(type: "int", nullable: false),
+                    EarlyLeaveMinutes = table.Column<int>(type: "int", nullable: false),
+                    RawOvertimeMinutes = table.Column<int>(type: "int", nullable: false),
+                    ApprovedOvertimeMinutes = table.Column<int>(type: "int", nullable: false),
+                    PaidOvertimeMinutes = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    PunchReviewStatus = table.Column<int>(type: "int", nullable: false),
+                    HasIncompletePunches = table.Column<bool>(type: "bit", nullable: false),
+                    IsManualOverride = table.Column<bool>(type: "bit", nullable: false),
+                    IsWeeklyRestDay = table.Column<bool>(type: "bit", nullable: false),
+                    IsHoliday = table.Column<bool>(type: "bit", nullable: false),
+                    HolidayId = table.Column<int>(type: "int", nullable: true),
+                    LeaveRequestId = table.Column<int>(type: "int", nullable: true),
+                    EntryEventId = table.Column<int>(type: "int", nullable: true),
+                    ExitEventId = table.Column<int>(type: "int", nullable: true),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    AdminNotes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_DailyAttendances", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_DailyAttendances_Employees_EmployeeId",
+                        column: x => x.EmployeeId,
+                        principalTable: "Employees",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_DailyAttendances_LeaveRequests_LeaveRequestId",
+                        column: x => x.LeaveRequestId,
+                        principalTable: "LeaveRequests",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_DailyAttendances_PublicHolidays_HolidayId",
+                        column: x => x.HolidayId,
+                        principalTable: "PublicHolidays",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.SetNull);
+                    table.ForeignKey(
+                        name: "FK_DailyAttendances_Shifts_ShiftId",
+                        column: x => x.ShiftId,
+                        principalTable: "Shifts",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LoanRepayments",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    LoanId = table.Column<int>(type: "int", nullable: false),
+                    EmployeeId = table.Column<int>(type: "int", nullable: false),
+                    Year = table.Column<int>(type: "int", nullable: false),
+                    Month = table.Column<int>(type: "int", nullable: false),
+                    DueAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    PaidAmount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    PayrollItemId = table.Column<int>(type: "int", nullable: true),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LoanRepayments", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_LoanRepayments_Employees_EmployeeId",
+                        column: x => x.EmployeeId,
+                        principalTable: "Employees",
+                        principalColumn: "Id");
+                    table.ForeignKey(
+                        name: "FK_LoanRepayments_Loans_LoanId",
+                        column: x => x.LoanId,
+                        principalTable: "Loans",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_LoanRepayments_PayrollItems_PayrollItemId",
+                        column: x => x.PayrollItemId,
+                        principalTable: "PayrollItems",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "EmployeeExpenses",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    EmployeeId = table.Column<int>(type: "int", nullable: false),
+                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    ExpenseDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Category = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    Description = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    ReceiptReference = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Currency = table.Column<string>(type: "nvarchar(10)", maxLength: 10, nullable: false),
+                    Month = table.Column<int>(type: "int", nullable: false),
+                    Year = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ApprovedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    SettlementMode = table.Column<int>(type: "int", nullable: false),
+                    SalaryAdvanceId = table.Column<int>(type: "int", nullable: true),
+                    PayrollItemId = table.Column<int>(type: "int", nullable: true),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_EmployeeExpenses", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_EmployeeExpenses_Employees_EmployeeId",
+                        column: x => x.EmployeeId,
+                        principalTable: "Employees",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_EmployeeExpenses_PayrollItems_PayrollItemId",
+                        column: x => x.PayrollItemId,
+                        principalTable: "PayrollItems",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_EmployeeExpenses_SalaryAdvances_SalaryAdvanceId",
+                        column: x => x.SalaryAdvanceId,
+                        principalTable: "SalaryAdvances",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.NoAction);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AttendanceCorrections",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    DailyAttendanceId = table.Column<int>(type: "int", nullable: false),
+                    EmployeeId = table.Column<int>(type: "int", nullable: false),
+                    WorkDate = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    FieldName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    OldValue = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    NewValue = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Reason = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ApprovedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AttendanceCorrections", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_AttendanceCorrections_DailyAttendances_DailyAttendanceId",
+                        column: x => x.DailyAttendanceId,
+                        principalTable: "DailyAttendances",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_AttendanceCorrections_Employees_EmployeeId",
+                        column: x => x.EmployeeId,
+                        principalTable: "Employees",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateIndex(
@@ -725,6 +1119,16 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 filter: "[NormalizedUserName] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AttendanceCorrections_DailyAttendanceId",
+                table: "AttendanceCorrections",
+                column: "DailyAttendanceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_AttendanceCorrections_EmployeeId_WorkDate",
+                table: "AttendanceCorrections",
+                columns: new[] { "EmployeeId", "WorkDate" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AttendanceEvents_EmployeeId_WorkDate",
                 table: "AttendanceEvents",
                 columns: new[] { "EmployeeId", "WorkDate" });
@@ -752,9 +1156,24 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_DailyAttendances_HolidayId",
+                table: "DailyAttendances",
+                column: "HolidayId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DailyAttendances_LeaveRequestId",
+                table: "DailyAttendances",
+                column: "LeaveRequestId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_DailyAttendances_ShiftId",
                 table: "DailyAttendances",
                 column: "ShiftId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_DailyAttendances_Status",
+                table: "DailyAttendances",
+                column: "Status");
 
             migrationBuilder.CreateIndex(
                 name: "IX_DailyAttendances_WorkDate",
@@ -772,15 +1191,58 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 column: "PayrollItemId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_Departments_Name",
+                table: "Departments",
+                column: "Name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmployeeExpenses_EmployeeId_Year_Month",
+                table: "EmployeeExpenses",
+                columns: new[] { "EmployeeId", "Year", "Month" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmployeeExpenses_PayrollItemId",
+                table: "EmployeeExpenses",
+                column: "PayrollItemId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmployeeExpenses_SalaryAdvanceId",
+                table: "EmployeeExpenses",
+                column: "SalaryAdvanceId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_EmployeeExpenses_Status",
+                table: "EmployeeExpenses",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Employees_DepartmentId",
+                table: "Employees",
+                column: "DepartmentId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Employees_DeviceEmployeeCode",
                 table: "Employees",
-                column: "DeviceEmployeeCode");
+                column: "DeviceEmployeeCode",
+                unique: true,
+                filter: "[DeviceEmployeeCode] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Employees_EmployeeCode",
                 table: "Employees",
                 column: "EmployeeCode",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Employees_IsActive",
+                table: "Employees",
+                column: "IsActive");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Employees_JobTitleId",
+                table: "Employees",
+                column: "JobTitleId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Employees_ShiftId",
@@ -803,9 +1265,46 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 column: "FileHash");
 
             migrationBuilder.CreateIndex(
+                name: "IX_JobTitles_DepartmentId",
+                table: "JobTitles",
+                column: "DepartmentId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_JobTitles_Name",
+                table: "JobTitles",
+                column: "Name",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_LeaveRequests_EmployeeId_StartDate_EndDate",
                 table: "LeaveRequests",
                 columns: new[] { "EmployeeId", "StartDate", "EndDate" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LeaveRequests_PayrollItemId",
+                table: "LeaveRequests",
+                column: "PayrollItemId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LeaveRequests_Status",
+                table: "LeaveRequests",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LoanRepayments_EmployeeId_Year_Month",
+                table: "LoanRepayments",
+                columns: new[] { "EmployeeId", "Year", "Month" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LoanRepayments_LoanId_Year_Month",
+                table: "LoanRepayments",
+                columns: new[] { "LoanId", "Year", "Month" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_LoanRepayments_PayrollItemId",
+                table: "LoanRepayments",
+                column: "PayrollItemId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Loans_EmployeeId_DeductionYear_DeductionMonth",
@@ -828,6 +1327,16 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 column: "PayrollItemId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_PayrollAdjustments_EmployeeId_Year_Month",
+                table: "PayrollAdjustments",
+                columns: new[] { "EmployeeId", "Year", "Month" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PayrollAdjustments_PayrollItemId",
+                table: "PayrollAdjustments",
+                column: "PayrollItemId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_PayrollItems_EmployeeId_EmployeeCode",
                 table: "PayrollItems",
                 columns: new[] { "EmployeeId", "EmployeeCode" });
@@ -843,6 +1352,11 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 table: "PayrollRuns",
                 columns: new[] { "Year", "Month", "Version" },
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_PublicHolidays_HolidayDate",
+                table: "PublicHolidays",
+                column: "HolidayDate");
 
             migrationBuilder.CreateIndex(
                 name: "IX_RawPunches_DedupHash",
@@ -864,6 +1378,22 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 name: "IX_RawPunches_ImportBatchId",
                 table: "RawPunches",
                 column: "ImportBatchId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SalaryAdvances_EmployeeId_Year_Month",
+                table: "SalaryAdvances",
+                columns: new[] { "EmployeeId", "Year", "Month" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SalaryAdvances_PayrollItemId",
+                table: "SalaryAdvances",
+                column: "PayrollItemId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_SalaryAdvances_Status",
+                table: "SalaryAdvances",
+                column: "Status");
         }
 
         /// <inheritdoc />
@@ -888,28 +1418,31 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 name: "AspNetUserTokens");
 
             migrationBuilder.DropTable(
+                name: "AttendanceCorrections");
+
+            migrationBuilder.DropTable(
                 name: "AttendanceEvents");
 
             migrationBuilder.DropTable(
                 name: "AuditLogs");
 
             migrationBuilder.DropTable(
-                name: "DailyAttendances");
+                name: "Deductions");
 
             migrationBuilder.DropTable(
-                name: "Deductions");
+                name: "EmployeeExpenses");
 
             migrationBuilder.DropTable(
                 name: "EmployeeShiftAssignments");
 
             migrationBuilder.DropTable(
-                name: "LeaveRequests");
-
-            migrationBuilder.DropTable(
-                name: "Loans");
+                name: "LoanRepayments");
 
             migrationBuilder.DropTable(
                 name: "OvertimeApprovals");
+
+            migrationBuilder.DropTable(
+                name: "PayrollAdjustments");
 
             migrationBuilder.DropTable(
                 name: "AspNetRoles");
@@ -918,13 +1451,28 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 name: "AspNetUsers");
 
             migrationBuilder.DropTable(
+                name: "DailyAttendances");
+
+            migrationBuilder.DropTable(
                 name: "RawPunches");
 
             migrationBuilder.DropTable(
-                name: "PayrollItems");
+                name: "SalaryAdvances");
+
+            migrationBuilder.DropTable(
+                name: "Loans");
+
+            migrationBuilder.DropTable(
+                name: "LeaveRequests");
+
+            migrationBuilder.DropTable(
+                name: "PublicHolidays");
 
             migrationBuilder.DropTable(
                 name: "ImportBatches");
+
+            migrationBuilder.DropTable(
+                name: "PayrollItems");
 
             migrationBuilder.DropTable(
                 name: "Employees");
@@ -933,7 +1481,13 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 name: "PayrollRuns");
 
             migrationBuilder.DropTable(
+                name: "JobTitles");
+
+            migrationBuilder.DropTable(
                 name: "Shifts");
+
+            migrationBuilder.DropTable(
+                name: "Departments");
         }
     }
 }
