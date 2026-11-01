@@ -73,3 +73,109 @@ namespace HrPayroll.Infrastructure.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_AspNetUsers", x => x.Id);
                 });
+
+            migrationBuilder.CreateTable(
+                name: "AuditLogs",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
+                    UserName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Action = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    EntityName = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    EntityId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: true),
+                    OldValue = table.Column<string>(type: "nvarchar(4000)", maxLength: 4000, nullable: true),
+                    NewValue = table.Column<string>(type: "nvarchar(4000)", maxLength: 4000, nullable: true),
+                    IpAddress = table.Column<string>(type: "nvarchar(64)", maxLength: 64, nullable: true),
+                    Timestamp = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AuditLogs", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ImportBatches",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    FileName = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: false),
+                    FileHash = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
+                    ImportedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ImportedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
+                    ImportedByName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    DetectedFormat = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    TotalRows = table.Column<int>(type: "int", nullable: false),
+                    SuccessRows = table.Column<int>(type: "int", nullable: false),
+                    DuplicateRows = table.Column<int>(type: "int", nullable: false),
+                    InvalidRows = table.Column<int>(type: "int", nullable: false),
+                    UnknownEmployeeRows = table.Column<int>(type: "int", nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ImportBatches", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "PayrollRuns",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Year = table.Column<int>(type: "int", nullable: false),
+                    Month = table.Column<int>(type: "int", nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ComputedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ComputedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    ApprovedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    ApprovedBy = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    TotalNet = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    TotalOvertime = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    TotalDeductions = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    Version = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_PayrollRuns", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Shifts",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    ShiftName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: false),
+                    StartTime = table.Column<TimeSpan>(type: "time", nullable: false),
+                    EndTime = table.Column<TimeSpan>(type: "time", nullable: false),
+                    GraceMinutes = table.Column<int>(type: "int", nullable: false),
+                    IsOvernight = table.Column<bool>(type: "bit", nullable: false),
+                    OvertimeMultiplier = table.Column<decimal>(type: "decimal(18,4)", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    OvertimeMinMinutes = table.Column<int>(type: "int", nullable: false),
+                    Notes = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Shifts", x => x.Id);
+                });
