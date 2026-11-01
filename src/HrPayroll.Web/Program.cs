@@ -11,11 +11,8 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// قاعدة البيانات: SQL Server
-// القيمة تُقرأ بالترتيب: appsettings.json ثم appsettings.Production.json
-// ثم User Secrets (في بيئة Development) ثم متغيّر البيئة
-// ConnectionStrings__DefaultConnection الذي يتقدّم على كل ما سبق.
-const string UnsetPasswordPlaceholder = "__SET_PASSWORD__";
+// قاعدة البيانات: SQL Server محلي فقط (Windows Authentication) — ConnectionStrings:DefaultConnection في appsettings.json.
+// لا يوجد اتصال بعيد أو احتياطي؛ يمكن تجاوز القيمة بمتغيّر البيئة ConnectionStrings__DefaultConnection عند الحاجة.
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -132,15 +129,12 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     var logger = services.GetRequiredService<ILogger<Program>>();
 
-    if (connectionString.Contains(UnsetPasswordPlaceholder, StringComparison.Ordinal))
+    if (string.IsNullOrWhiteSpace(connectionString))
     {
         // لا تُطبع أي بيانات اعتماد — تُذكر أسماء مفاتيح التهيئة فقط.
         logger.LogError(
-            "لم يُضبط Connection String بعد: القيمة الفعّالة ما زالت تحتوي على القالب \"{Placeholder}\". " +
-            "اضبط \"ConnectionStrings:DefaultConnection\" في appsettings.Production.json " +
-            "(غير مُتتبَّع في Git) أو في User Secrets أو في متغيّر البيئة " +
-            "ConnectionStrings__DefaultConnection. لن تُنفَّذ أي ترحيلات أو تهيئة بيانات.",
-            UnsetPasswordPlaceholder);
+            "ConnectionStrings:DefaultConnection فارغ. اضبطه في appsettings.json " +
+            "(SQL Server محلي مع Windows Authentication). لن تُنفَّذ أي ترحيلات أو تهيئة بيانات.");
     }
     else if (!builder.Configuration.GetValue("Database:ApplyMigrationsOnStartup", true))
     {
@@ -178,21 +172,17 @@ using (var scope = app.Services.CreateScope())
             logger.LogInformation("مخطط قاعدة البيانات مطابق للترحيلات ({Applied} ترحيلًا مطبّقًا).",
                 db.Database.GetAppliedMigrations().Count());
 
-            // بيانات أول مسؤول تأتي من الإعدادات فقط (متغيّر بيئة أو User Secrets أو ملف غير مُتتبَّع)،
-            // ولا تُوجود أي كلمة مرور افتراضية في الكود أو المستودع.
-            var seedSection = builder.Configuration.GetSection("Seed");
+            // الأدوار والورديات والإعدادات الافتراضية، ثم حساب المسؤول من قسم AdminAccount في appsettings.json.
             await DbSeeder.SeedAsync(
                 db,
                 services.GetRequiredService<RoleManager<IdentityRole>>(),
                 services.GetRequiredService<UserManager<ApplicationUser>>(),
-                logger,
-                new AdminSeedOptions
-                {
-                    IsDevelopment = app.Environment.IsDevelopment(),
-                    Email = seedSection["AdminEmail"],
-                    Password = seedSection["AdminPassword"],
-                    FullName = seedSection["AdminFullName"]
-                });
+                logger);
+            await AdminAccountSeeder.SeedAsync(
+                builder.Configuration,
+                services.GetRequiredService<RoleManager<IdentityRole>>(),
+                services.GetRequiredService<UserManager<ApplicationUser>>(),
+                logger);
         }
         catch (Exception ex)
         {
