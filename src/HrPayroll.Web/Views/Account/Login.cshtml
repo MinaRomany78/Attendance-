@@ -20,14 +20,12 @@
             @if (!string.IsNullOrWhiteSpace(demoEmail))
             {
                 <span>
-                    حساب تجريبي: <span dir="ltr">@demoEmail</span> — كلمة المرور تُضبط في إعدادات التطوير المحلية
-                    (<span dir="ltr">Seed:AdminPassword</span>) أو تُطبع مرة واحدة في سجل بدء التشغيل عند أول إنشاء.
-                    لا تُنشأ أي بيانات اعتماد افتراضية في بيئة الإنتاج.
+                    حساب تجريبي: <span dir="ltr">@demoEmail</span> —                    كلمة المرور تُقرأ من قسم <span dir="ltr">AdminAccount</span> في appsettings.json.
                 </span>
             }
             else
             {
-                <span>لم يُضبط حساب تجريبي بعد. راجع سجل بدء التشغيل لمعرفة كيفية إنشاء أول مسؤول.</span>
+                <span>لم يُضبط حساب المسؤول. راجع قسم <span dir="ltr">AdminAccount</span> في appsettings.json.</span>
             }
         </div>
     }
