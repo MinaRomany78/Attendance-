@@ -13,17 +13,20 @@ public class AccountController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<AccountController> _logger;
+    private readonly IConfiguration _configuration;
 
     public AccountController(
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
         IWebHostEnvironment env,
-        ILogger<AccountController> logger)
+        ILogger<AccountController> logger,
+        IConfiguration configuration)
     {
         _signInManager = signInManager;
         _userManager = userManager;
         _env = env;
         _logger = logger;
+        _configuration = configuration;
     }
 
     [AllowAnonymous]
@@ -79,7 +82,7 @@ public class AccountController : Controller
         ViewData["ReturnUrl"] = returnUrl;
         // تلميح الحساب التجريبي في بيئة التطوير فقط — لا شيء من هذا يظهر في الإنتاج
         ViewData["ShowDemoHint"] = _env.IsDevelopment();
-        ViewData["DemoAdminEmail"] = _env.IsDevelopment() ? DbSeeder.DevelopmentAdminEmail : null;
+        ViewData["DemoAdminEmail"] = _env.IsDevelopment() ? _configuration["AdminAccount:Email"] : null;
     }
 
     [HttpPost]
