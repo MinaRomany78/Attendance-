@@ -62,12 +62,9 @@ tests/HrPayroll.Tests         166 اختبارًا (حسابات، استيرا�
 
 ## الترحيلات وقاعدة البيانات
 
-سلسلة الترحيلات الحالية:
+سلسلة الترحيلات الحالية (ترحيل مدمج واحد ينشئ كامل المخطط: الموظفين، الورديات، الحضور، الرواتب، السلف، المصروفات، القروض، الإجازات):
 
-1. `20261012085017_InitialCreate`
-2. `20261013064441_HrUpgrade_Employees_Shifts_Attendance_Payroll`
-3. `20261013130424_PayrollSheetEditing_LeaveBalances`
-4. `20261027093747_HrUpgrade_Advances_Expenses_Repayments`
+1. `20261031101003_initalCreate`
 
 ```bash
 dotnet ef migrations list --project src/HrPayroll.Infrastructure --startup-project src/HrPayroll.Web
