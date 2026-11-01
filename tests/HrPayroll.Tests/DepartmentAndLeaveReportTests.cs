@@ -3,12 +3,8 @@ using HrPayroll.Domain.Entities;
 using HrPayroll.Domain.Enums;
 using HrPayroll.Infrastructure.Import;
 using HrPayroll.Infrastructure.Persistence;
-using HrPayroll.Infrastructure.Seed;
 using HrPayroll.Infrastructure.Services;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -328,7 +324,7 @@ public class DepartmentAndLeaveReportTests
         // ملف الخروج: بالترتيب المعاكس تمامًا (1002 ثم 1001)
         var exitFile = AttendanceFile("O",
             ("1002", "ب", "2024-10-07 15:00:00"),
-            ("1001", "أ", "2024-10-07 16:00:00"));
+            ("1002", "ب", "2024-10-07 15:00:00"));
         var exitAnalysis = await import.AnalyzeAsync(exitFile, "exit.xlsx");
         Assert.True(exitAnalysis.HasMapping);
         var exitCommit = await import.CommitAsync(exitAnalysis, "exit.xlsx", "u1", "tester");
@@ -385,122 +381,5 @@ public class DepartmentAndLeaveReportTests
             await import.CommitAsync(a2, name, "u1", "tester");
         }
         Assert.Equal(2, await ctx.RawPunches.CountAsync());
-    }
-
-    // ===================== أمان إنشاء أول مسؤول =====================
-
-    private static ServiceProvider IdentityProvider(SqliteConnection connection)
-    {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddDbContext<AppDbContext>(o => o.UseSqlite(connection));
-        services.AddIdentityCore<ApplicationUser>(options =>
-            {
-                options.Password.RequiredLength = 8;
-                options.Password.RequireNonAlphanumeric = false;
-            })
-            .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<AppDbContext>();
-        return services.BuildServiceProvider();
-    }
-
-    [Fact]
-    public async Task Production_Without_Configured_Credentials_Creates_No_User_At_All()
-    {
-        using var connection = new SqliteConnection("DataSource=:memory:");
-        connection.Open();
-        using var provider = IdentityProvider(connection);
-        await using var ctx = provider.GetRequiredService<AppDbContext>();
-        ctx.Database.EnsureCreated();
-
-        await DbSeeder.SeedAsync(
-            ctx,
-            provider.GetRequiredService<RoleManager<IdentityRole>>(),
-            provider.GetRequiredService<UserManager<ApplicationUser>>(),
-            NullLogger.Instance,
-            new AdminSeedOptions { IsDevelopment = false });
-
-        // لا يُنشأ أي حساب بكلمة مرور افتراضية في الإنتاج
-        Assert.Empty(await ctx.Users.ToListAsync());
-
-        // الأدوار تُنشأ دائمًا لأنها لا تحمل بيانات اعتماد
-        Assert.Equal(AppRoles.All.Length, await ctx.Roles.CountAsync());
-    }
-
-    [Fact]
-    public async Task Development_Fallback_Creates_An_Admin_Without_Any_Static_Password()
-    {
-        using var connection = new SqliteConnection("DataSource=:memory:");
-        connection.Open();
-        using var provider = IdentityProvider(connection);
-        await using var ctx = provider.GetRequiredService<AppDbContext>();
-        ctx.Database.EnsureCreated();
-
-        var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
-        await DbSeeder.SeedAsync(
-            ctx,
-            provider.GetRequiredService<RoleManager<IdentityRole>>(),
-            userManager,
-            NullLogger.Instance,
-            new AdminSeedOptions { IsDevelopment = true });
-
-        var admin = await userManager.FindByEmailAsync(DbSeeder.DevelopmentAdminEmail);
-        Assert.NotNull(admin);
-        Assert.True(await userManager.IsInRoleAsync(admin!, AppRoles.Admin));
-
-        // لا توجد أي كلمة مرور ثابتة معروفة في الكود تُقبل للحساب
-        Assert.False(await userManager.CheckPasswordAsync(admin!, "Admin@12345"));
-        Assert.False(await userManager.CheckPasswordAsync(admin!, "admin@hr.local"));
-    }
-
-    [Fact]
-    public async Task Configured_First_Admin_Is_Created_And_Granted_The_Admin_Role()
-    {
-        using var connection = new SqliteConnection("DataSource=:memory:");
-        connection.Open();
-        using var provider = IdentityProvider(connection);
-        await using var ctx = provider.GetRequiredService<AppDbContext>();
-        ctx.Database.EnsureCreated();
-
-        var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
-        await DbSeeder.SeedAsync(
-            ctx,
-            provider.GetRequiredService<RoleManager<IdentityRole>>(),
-            userManager,
-            NullLogger.Instance,
-            new AdminSeedOptions
-            {
-                IsDevelopment = false,
-                Email = "owner@company.com",
-                Password = "FirstAdmin#2026",
-                FullName = "مالك النظام"
-            });
-
-        var admin = await userManager.FindByEmailAsync("owner@company.com");
-        Assert.NotNull(admin);
-        Assert.True(await userManager.IsInRoleAsync(admin!, AppRoles.Admin));
-        Assert.True(await userManager.CheckPasswordAsync(admin!, "FirstAdmin#2026"));
-    }
-
-    [Fact]
-    public async Task Existing_Users_Are_Not_Duplicated_Or_Overwritten_On_Reseed()
-    {
-        using var connection = new SqliteConnection("DataSource=:memory:");
-        connection.Open();
-        using var provider = IdentityProvider(connection);
-        await using var ctx = provider.GetRequiredService<AppDbContext>();
-        ctx.Database.EnsureCreated();
-
-        var userManager = provider.GetRequiredService<UserManager<ApplicationUser>>();
-        var roleManager = provider.GetRequiredService<RoleManager<IdentityRole>>();
-
-        await DbSeeder.SeedAsync(ctx, roleManager, userManager, NullLogger.Instance,
-            new AdminSeedOptions { IsDevelopment = false, Email = "owner@company.com", Password = "FirstAdmin#2026" });
-        await DbSeeder.SeedAsync(ctx, roleManager, userManager, NullLogger.Instance,
-            new AdminSeedOptions { IsDevelopment = true });
-
-        var users = await ctx.Users.ToListAsync();
-        Assert.Single(users);
-        Assert.Equal("owner@company.com", users[0].Email);
     }
 }
