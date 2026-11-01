@@ -25,7 +25,7 @@ tests/HrPayroll.Tests         166 اختبارًا (حسابات، استيرا�
 
 - .NET 9 SDK
 - SQL Server محلي (Express أو Developer أو غيرها) مع Windows Authentication — لا حاجة لأي خادم بعيد أو اتصال إنترنت لقاعدة البيانات
-- `dotnet-ef` لتشغيل أو إنشاء الترحيلات
+- `dotnet-ef` (`dotnet tool install --global dotnet-ef --version 9.0.*`)
 
 ## قاعدة البيانات: SQL Server محلي فقط
 
@@ -41,7 +41,7 @@ tests/HrPayroll.Tests         166 اختبارًا (حسابات، استيرا�
 
 - إذا كان لديك نسخة مُسمّاة (مثل `SQLEXPRESS`) غيّر `Server` إلى `.\SQLEXPRESS`.
 - اسم قاعدة البيانات `HrPayrollDb` ينشئه أمر الترحيل تلقائيًا إن لم يكن موجودًا (لا يحذف ولا يُسقط أي قاعدة).
-- قبل التشغيل تأكد من خدمة SQL Server تعمل وأن حسابك لديه صلاحية إنشاء قاعدة بيانات.
+- قبل التشغيل تأكد أن خدمة SQL Server تعمل وأن حسابك لديه صلاحية إنشاء قاعدة بيانات.
 
 ## حساب المسؤول الأول (AdminAccount)
 
@@ -107,8 +107,6 @@ dotnet test --configuration Release
 dotnet test tests/HrPayroll.Tests/HrPayroll.Tests.csproj --configuration Release
 ```
 
-تغطي الاختبارات (166 اختبارًا):
-
 ## الحضور والورديات
 
 - ثلاثة ورديات قابلة للضبط، والموظف غير مقيّد بوردة واحدة: تُحدَّد الوردة من البصمة نفسها.
@@ -130,3 +128,6 @@ dotnet test tests/HrPayroll.Tests/HrPayroll.Tests.csproj --configuration Release
 - كل صفحة إدارية محمية بـ `[Authorize]` وسياسات أدوار (Admin / HR / Accountant / Viewer).
 - حماية CSRF على كل النماذج، والتحقق من نوع وحجم الملفات المرفوعة.
 - لا تُسجَّل كلمات المرور أو بيانات الاتصال في السجلات.
+
+تغطي الاختبارات (166 اختبارًا): حساب الحضور والورديات الليلية، الرواتب والإضافي والغياب،
+منع الخصم المزدوج، الإقفال وإعادة الفتح، الاستيراد والتصدير، التقارير، والأمان.
