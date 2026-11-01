@@ -324,7 +324,7 @@ public class DepartmentAndLeaveReportTests
         // ملف الخروج: بالترتيب المعاكس تمامًا (1002 ثم 1001)
         var exitFile = AttendanceFile("O",
             ("1002", "ب", "2024-10-07 15:00:00"),
-            ("1002", "ب", "2024-10-07 15:00:00"));
+            ("1001", "أ", "2024-10-07 16:00:00"));
         var exitAnalysis = await import.AnalyzeAsync(exitFile, "exit.xlsx");
         Assert.True(exitAnalysis.HasMapping);
         var exitCommit = await import.CommitAsync(exitAnalysis, "exit.xlsx", "u1", "tester");
