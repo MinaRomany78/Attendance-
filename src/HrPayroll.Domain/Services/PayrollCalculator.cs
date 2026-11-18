@@ -1,4 +1,5 @@
 using HrPayroll.Domain.Models;
+using HrPayroll.Domain.Enums;
 
 namespace HrPayroll.Domain.Services;
 
@@ -24,36 +25,87 @@ public static class PayrollCalculator
         if (inputs.BasicSalary < 0) throw new ArgumentOutOfRangeException(nameof(inputs));
 
         var dailyRate = policy.DailyRateFor(inputs.BasicSalary, inputs.DailyRateOverride);
-        var hourlyRate = policy.HourlyRateFor(dailyRate);
-        var minuteRate = policy.MinuteRateFor(dailyRate);
+        var standardHours = inputs.StandardWorkHours > 0m ? inputs.StandardWorkHours : policy.WorkHoursPerDay;
+        var hourlyRate = inputs.HourlyRateOverride ?? Math.Round(dailyRate / standardHours, 6, MidpointRounding.AwayFromZero);
+        var minuteRate = inputs.MinuteRateOverride ?? Math.Round(hourlyRate / 60m, 8, MidpointRounding.AwayFromZero);
 
-        // ---------- التأخير ----------
+        // ---------- فروق الحضور: مكونات متنافية تمنع الخصم المزدوج ----------
         var lateMinutes = Math.Max(0, inputs.LateMinutes);
-        var lateDeduction = policy.LateDeductionEnabled ? Round2(lateMinutes * minuteRate) : 0m;
+        var earlyMinutes = inputs.AttendanceDurations.Count > 0
+            ? checked((int)decimal.Round(inputs.AttendanceDurations.Sum(d => Math.Max(0m, d.EarlyDepartureMinutes)), 0, MidpointRounding.AwayFromZero))
+            : Math.Max(0, inputs.EarlyLeaveMinutes);
+        var duration = inputs.DurationSnapshotOverride ?? PayrollDurationCalculator.Attendance(inputs, policy);
+        decimal lateDeduction = 0m, earlyDeduction = 0m, shortageDeduction = 0m;
+        if (policy.RoundedAttendanceDeductionsEnabled)
+        {
+            var combined = Round2(duration.ChargeableHours * hourlyRate);
+            if (duration.Basis == AttendanceDeductionBasis.TotalMissing)
+                shortageDeduction = combined;
+            else if (duration.Basis == AttendanceDeductionBasis.LateAndEarly)
+            {
+                // Apply the configured rounding once, then allocate its money without rounding twice.
+                var lateWeight = policy.LateDeductionEnabled
+                    ? inputs.AttendanceDurations.Count > 0 ? inputs.AttendanceDurations.Sum(d => Math.Max(0m, d.LateMinutes)) : lateMinutes
+                    : 0m;
+                var earlyWeight = (decimal)earlyMinutes;
+                var weight = lateWeight + earlyWeight;
+                var lateHours = weight > 0m ? duration.ChargeableHours * lateWeight / weight : 0m;
+                if (inputs.AttendanceDurations.Count > 0 && policy.LateDeductionEnabled)
+                {
+                    if (duration.Scope == HourRoundingScope.PerEvent)
+                        lateHours = inputs.AttendanceDurations.Sum(d => HourDurationCalculator.RoundMinutes(Math.Max(0m, d.LateMinutes), policy.HourRounding));
+                    else if (duration.Scope == HourRoundingScope.PerDay)
+                        lateHours = inputs.AttendanceDurations.GroupBy(d => d.WorkDate.Date).Sum(g =>
+                        {
+                            var dayLate = g.Sum(d => Math.Max(0m, d.LateMinutes));
+                            var dayTotal = dayLate + g.Sum(d => Math.Max(0m, d.EarlyDepartureMinutes));
+                            return dayTotal > 0m ? HourDurationCalculator.RoundMinutes(dayTotal, policy.HourRounding) * dayLate / dayTotal : 0m;
+                        });
+                }
+                lateDeduction = Math.Clamp(Round2(lateHours * hourlyRate), 0m, combined);
+                earlyDeduction = combined - lateDeduction;
+            }
+            else lateDeduction = combined;
+        }
+        else
+        {
+            lateDeduction = policy.LateDeductionEnabled ? Round2(lateMinutes * minuteRate) : 0m;
+            earlyDeduction = policy.EarlyLeaveDeductionEnabled ? Round2(earlyMinutes * minuteRate) : 0m;
+        }
+        // Sheet edits retain each recorded financial component, including historical zeroes.
+        if (inputs.SavedAttendanceDeduction.HasValue && !inputs.SavedEarlyLeaveDeduction.HasValue
+            && !inputs.SavedShortageDeduction.HasValue)
+        {
+            // Earlier snapshots stored the whole attendance charge in LateDeduction.
+            earlyDeduction = 0m;
+            shortageDeduction = 0m;
+        }
+        lateDeduction = inputs.SavedAttendanceDeduction ?? lateDeduction;
+        earlyDeduction = inputs.SavedEarlyLeaveDeduction ?? earlyDeduction;
+        shortageDeduction = inputs.SavedShortageDeduction ?? shortageDeduction;
+        duration = duration with { DeductionAmount = lateDeduction + earlyDeduction + shortageDeduction };
 
         // ---------- الإضافي ----------
         var multiplier = inputs.OvertimeMultiplier <= 0m ? 1m : inputs.OvertimeMultiplier;
 
         var rawMinutes = Math.Max(0, inputs.RawOvertimeMinutes);
         var approvedMinutes = Math.Max(0, inputs.ApprovedOvertimeMinutes);
-        var paidMinutes = inputs.PaidOvertimeMinutes > 0
+        var paidMinutes = inputs.HasExplicitPaidOvertimeMinutes || inputs.PaidOvertimeMinutes > 0
             ? Math.Max(0, inputs.PaidOvertimeMinutes)
             : approvedMinutes;
-
-        // الإضافي المدفوع لا يتجاوز المعتمد، والمعتمد لا يتجاوز الخام
-        if (approvedMinutes > rawMinutes && rawMinutes > 0) approvedMinutes = rawMinutes;
-
-        var rawHours = Round2(rawMinutes / 60m);
-        var approvedHours = Round2(approvedMinutes / 60m);
-        var paidHours = Round2(paidMinutes / 60m);
-
-        var overtimeAmount = OvertimeValueForMinutes(paidMinutes, hourlyRate, multiplier);
+        paidMinutes = Math.Min(paidMinutes, approvedMinutes);
+        var rawHours = rawMinutes / 60m;
+        var approvedHours = approvedMinutes / 60m;
+        var paidHours = inputs.SavedPaidOvertimeHours ?? PayrollDurationCalculator.OvertimeHours(inputs, policy, paidMinutes);
+        var overtimeAmount = inputs.SavedOvertimeAmount ?? Round2(paidHours * hourlyRate * multiplier);
 
         // ---------- الغياب والإجازات ----------
         var absenceDays = Math.Max(0m, inputs.AbsenceDays);
+        var chargeableAbsenceDays = policy.AbsenceDeductionMaxDays > 0
+            ? Math.Min(absenceDays, policy.AbsenceDeductionMaxDays) : absenceDays;
         var unpaidLeaveDays = Math.Max(0m, inputs.UnpaidLeaveDays);
 
-        var absenceDeduction = policy.AbsenceDeductionEnabled ? Round2(absenceDays * dailyRate) : 0m;
+        var absenceDeduction = policy.AbsenceDeductionEnabled ? Round2(chargeableAbsenceDays * dailyRate) : 0m;
         var unpaidLeaveDeduction = policy.UnpaidLeaveDeductionEnabled
             ? Round2(unpaidLeaveDays * dailyRate)
             : 0m;
@@ -74,24 +126,32 @@ public static class PayrollCalculator
         var deductionsTotal = Round2(Math.Max(0m, inputs.DeductionsTotal));
         var otherDeductions = Round2(Math.Max(0m, inputs.OtherDeductions));
 
-        var totalDeductions = Round2(lateDeduction + absenceDeduction + unpaidLeaveDeduction
+        var totalDeductions = Round2(lateDeduction + earlyDeduction + shortageDeduction + absenceDeduction + unpaidLeaveDeduction
                                      + advances + deductionsTotal + otherDeductions);
 
         var netSalary = Round2(grossEarnings - totalDeductions);
-        if (netSalary < 0m) netSalary = 0m;
+        if (netSalary < 0m && !inputs.AllowNegativeNetSalary) netSalary = 0m;
 
         var details = PayrollComputation.SerializeDetails(new
         {
             policy = new
             {
+                allowNegativeNetSalary = inputs.AllowNegativeNetSalary,
                 dailyRateBasisDays = policy.WorkDaysPerMonth,
                 workHoursPerDay = policy.WorkHoursPerDay,
                 overtimeMultiplier = multiplier,
                 lateDeductionEnabled = policy.LateDeductionEnabled,
+                earlyLeaveDeductionEnabled = policy.EarlyLeaveDeductionEnabled,
                 absenceDeductionEnabled = policy.AbsenceDeductionEnabled,
+                absenceDeductionMaxDays = policy.AbsenceDeductionMaxDays,
                 unpaidLeaveDeductionEnabled = policy.UnpaidLeaveDeductionEnabled
+                , roundedAttendanceDeductionsEnabled = policy.RoundedAttendanceDeductionsEnabled
+                , roundedOvertimeEnabled = policy.RoundedOvertimeEnabled
+                , attendanceDeductionBasis = policy.AttendanceDeductionBasis
+                , hourRounding = policy.HourRounding
             },
-            rates = new { basicSalary = inputs.BasicSalary, dailyRate, hourlyRate, minuteRate },
+            rates = new { basicSalary = inputs.BasicSalary, dailyRate, hourlyRate, minuteRate, standardWorkHours = standardHours },
+            duration,
             attendance = new
             {
                 attendanceDays = inputs.AttendanceDays,
@@ -99,6 +159,7 @@ public static class PayrollCalculator
                 paidLeaveDays = inputs.PaidLeaveDays,
                 unpaidLeaveDays,
                 absenceDays
+                , earlyLeaveMinutes = earlyMinutes
             },
             overtime = new
             {
@@ -111,7 +172,9 @@ public static class PayrollCalculator
             deductions = new
             {
                 late = new { minutes = lateMinutes, rate = minuteRate, amount = lateDeduction },
-                absence = new { days = absenceDays, rate = dailyRate, amount = absenceDeduction },
+                earlyLeave = new { minutes = earlyMinutes, rate = minuteRate, amount = earlyDeduction },
+                shortage = new { minutes = duration.ActualMissingMinutes, amount = shortageDeduction },
+                absence = new { days = absenceDays, chargedDays = chargeableAbsenceDays, rate = dailyRate, amount = absenceDeduction },
                 unpaidLeave = new { days = unpaidLeaveDays, rate = dailyRate, amount = unpaidLeaveDeduction },
                 advances, otherDeductions, deductionsTotal
             },
@@ -157,19 +220,23 @@ public static class PayrollCalculator
             GrossEarnings: grossEarnings,
             TotalDeductions: totalDeductions,
             NetSalary: netSalary,
-            CalculationDetails: details);
+            CalculationDetails: details)
+        {
+            Duration = duration, EarlyLeaveMinutes = earlyMinutes,
+            EarlyLeaveDeduction = earlyDeduction, ShortageDeduction = shortageDeduction,
+            ChargeableAbsenceDays = chargeableAbsenceDays
+        };
     }
 
     /// <summary>
-    /// قيمة الإضافي بالدقائق المدفوعة: تُحوَّل الدقائق إلى ساعات (بمنزلتين عشريتين)
-    /// ثم تُضرب في الأجر بالساعة. هذه هي المعادلة الوحيدة المستخدمة في التطبيق
-    /// (كشف الراتب + شاشة اعتماد الإضافي) حتى تتطابق الأرقام المعروضة مع المحسوبة.
+    /// Convert exact minute evidence to decimal hours, then round the final money only.
+    /// Financial duration rounding, when approved, is applied separately once at its configured scope.
     /// </summary>
     public static decimal OvertimeValueForMinutes(int payableMinutes, decimal hourlyRate, decimal multiplier = 1m)
     {
         var m = multiplier <= 0m ? 1m : multiplier;
         if (payableMinutes <= 0 || hourlyRate <= 0m) return 0m;
-        return Round2(Round2(payableMinutes / 60m) * hourlyRate * m);
+        return Round2(payableMinutes / 60m * hourlyRate * m);
     }
 
     /// <summary>قيمة الإضافي وحدها (بدون أي مضاعف افتراضيًا).</summary>

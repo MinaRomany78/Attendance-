@@ -45,6 +45,7 @@ public class AttendanceProcessingService
     public async Task<ProcessingResult> ProcessAsync(
         DateTime from, DateTime to, int? employeeId = null, string? user = null, CancellationToken ct = default)
     {
+        await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         from = from.Date;
         to = to.Date;
         if (to < from) (from, to) = (to, from);
@@ -52,6 +53,18 @@ public class AttendanceProcessingService
         var policy = await _settings.GetPolicyAsync(ct);
         var restDays = await _settings.GetWeeklyRestDaysAsync(ct);
         var result = new ProcessingResult();
+        var today = await CompanyPayrollClock.TodayAsync(_db, ct);
+        if (to > today)
+        {
+            to = today;
+            result.Warnings.Add("لم تتم معالجة الأيام المستقبلية كغياب؛ نهاية المعالجة هي تاريخ الشركة الحالي.");
+        }
+        if (from > to) return result;
+        var protectedRuns = await _db.PayrollRuns.AsNoTracking()
+            .Where(r => r.Status == PayrollStatus.Approved || r.Status == PayrollStatus.Locked).ToListAsync(ct);
+        var protectedPeriods = protectedRuns.Select(PayrollPeriod.ForRun).Where(p => p.Overlaps(from,to)).ToList();
+        if (protectedPeriods.Count > 0)
+            result.Warnings.Add("لم تتم إعادة معالجة تواريخ دورات الرواتب المعتمدة أو المقفلة؛ يلزم إعادة فتح معتمدة.");
 
         var employeesQuery = _db.Employees.AsNoTracking();
         if (employeeId.HasValue) employeesQuery = employeesQuery.Where(e => e.Id == employeeId.Value);
@@ -104,6 +117,13 @@ public class AttendanceProcessingService
             .Where(d => empIds.Contains(d.EmployeeId) && d.WorkDate >= from && d.WorkDate <= to)
             .ToListAsync(ct);
         var dailyByKey = existingDaily.ToDictionary(d => (d.EmployeeId, d.WorkDate.Date));
+        var manualIds = existingDaily.Where(d => d.IsManualOverride).Select(d => d.Id).ToList();
+        var manualHistory = await _db.AttendanceCorrections.AsNoTracking()
+            .Where(c => manualIds.Contains(c.DailyAttendanceId) && c.Status == ApprovalStatus.Approved
+                && (c.FieldName == nameof(DailyAttendance.Status) || c.FieldName == "StatusOverride"))
+            .ToListAsync(ct);
+        var statusOverrides = manualHistory.GroupBy(c => c.DailyAttendanceId)
+            .ToDictionary(g => g.Key, g => AttendanceDayRecalculator.HasIntentionalStatus(g));
 
         var existingEvents = await _db.AttendanceEvents
             .Where(a => empIds.Contains(a.EmployeeId) && a.WorkDate >= from && a.WorkDate <= to)
@@ -121,7 +141,7 @@ public class AttendanceProcessingService
             if (empPunches.Count == 0 && !spanByEmp.ContainsKey(emp.Id)) continue;
 
             var empPunchInputs = empPunches
-                .Select(p => new RawPunchInput(p.Id, p.DeviceEmployeeCode, p.DeviceId, p.AttType, p.PunchTime, p.RawPunchTimeText, p.RowNumber))
+                .Select(p => new RawPunchInput(p.Id, p.DeviceEmployeeCode, p.DeviceId, p.NormalizedAttType ?? p.AttType, p.PunchTime, p.RawPunchTimeText, p.RowNumber))
                 .ToList();
 
             // إسناد كل بصمة إلى يوم عمل واحد فقط (تغطي الورديات الليلية وتنقل البصمة ليوم واحد)
@@ -158,6 +178,7 @@ public class AttendanceProcessingService
                 // لا حضور قبل تاريخ التعيين ولا بعد تاريخ إنهاء الخدمة
                 if (date.Date < emp.HireDate.Date) continue;
                 if (emp.TerminationDate.HasValue && date.Date > emp.TerminationDate.Value.Date) continue;
+                if (protectedPeriods.Any(p => p.Contains(date))) continue;
 
                 var assignedShift = ResolveAssignedShift(emp, empAssignments, shiftById, date);
                 // بصمات هذا اليوم فقط حسب الإسناد الموحّد (كل بصمة ليوم عمل واحد)
@@ -259,8 +280,6 @@ public class AttendanceProcessingService
                 }
 
                 var window = ShiftWindowResolver.Resolve(shift, date);
-                previousDayShift = shift;
-                previousDayDate = date;
 
                 // بصمات هذا اليوم هي نفسها المُسندة إليه (لا تُحتسب أي بصمة في يومين)
                 var workDateInputs = punchInputs;
@@ -275,6 +294,24 @@ public class AttendanceProcessingService
                 };
 
                 var wasManual = existing?.IsManualOverride ?? false;
+                if (wasManual)
+                {
+                    var correctedShift = daily.ShiftId.HasValue && shiftById.TryGetValue(daily.ShiftId.Value, out var savedShift)
+                        ? savedShift : shift;
+                    AttendanceDayRecalculator.Apply(daily, correctedShift, policy,
+                        statusOverrides.GetValueOrDefault(daily.Id));
+                }
+                if (wasManual && workDateInputs.Count == 0)
+                {
+                    // A neighboring import may reprocess this day without new raw punches.
+                    // Preserve corrected times; refresh derived values through the shared calculation engine.
+                    const string preserved = "يوجد تصحيح يدوي معتمد محفوظ على هذا اليوم ولم تُستبدل قيمه بالبصمات الخام";
+                    if (!(daily.NeedsReviewReason?.Contains(preserved, StringComparison.Ordinal) ?? false))
+                        daily.NeedsReviewReason = string.Join(" | ", new[] { daily.NeedsReviewReason, preserved }
+                            .Where(x => !string.IsNullOrWhiteSpace(x)));
+                    result.DaysProcessed++;
+                    continue;
+                }
 
                 var dayIsAmbiguous = workDateInputs.Any(i => ambiguousPunchIds.Contains(i.Id));
                 if (dayIsAmbiguous)
@@ -289,15 +326,25 @@ public class AttendanceProcessingService
 
                 // امتداد وردية ليلية بدأت في اليوم السابق: اليوم الحالي ليس يوم عمل مستقلًا
                 var isOvernightContinuation = workDateInputs.Count == 0
+                    && assignedShift is null
                     && previousDayShift is { IsOvernight: true }
                     && previousDayDate.HasValue
                     && ShiftWindowResolver.Resolve(previousDayShift, previousDayDate.Value).End > date;
 
-                daily.ShiftId = shift.Id;
-                daily.ShiftStart = window.Start;
-                daily.ShiftEnd = window.End;
-                daily.DetectionSource = detectionSource;
-                daily.NeedsReviewReason = detectionReason;
+                if (workDateInputs.Count > 0)
+                {
+                    previousDayShift = shift;
+                    previousDayDate = date;
+                }
+
+                if (!wasManual)
+                {
+                    daily.ShiftId = shift.Id;
+                    daily.ShiftStart = window.Start;
+                    daily.ShiftEnd = window.End;
+                    daily.DetectionSource = detectionSource;
+                    daily.NeedsReviewReason = detectionReason;
+                }
                 daily.IsWeeklyRestDay = isRestDay;
                 daily.IsHoliday = isHoliday;
                 daily.HolidayId = holiday?.Id;
@@ -343,9 +390,12 @@ public class AttendanceProcessingService
                     }
                     else if (spanByEmp.TryGetValue(emp.Id, out var span) && date >= span.Item1.Date && date <= span.Item2.Date)
                     {
-                        daily.Status = AttendanceStatus.Absent;
-                        daily.Notes = "لا توجد بصمات والبيانات مستوردة لهذا اليوم";
-                        result.AbsentDays++;
+                        daily.Status = AttendanceStatus.NeedsReview;
+                        daily.PunchReviewStatus = ClassificationStatus.NeedsReview;
+                        daily.HasIncompletePunches = true;
+                        daily.NeedsReviewReason = "غياب البصمات بين تاريخين مستوردين لا يثبت الغياب؛ يلزم التحقق من اكتمال بيانات اليوم.";
+                        daily.Notes = "بيانات حضور غير مؤكدة؛ لم يُسجل غياب مالي تلقائياً.";
+                        result.ReviewCases++;
                     }
                     else
                     {
@@ -381,7 +431,8 @@ public class AttendanceProcessingService
                         daily.EarlyLeaveMinutes = classification.EarlyLeaveMinutes;
                         daily.RawOvertimeMinutes = classification.CalculatedOvertimeMinutes;
                         // الإضافي المعتمد يُترك للمراجعة: لا يُعتمد تلقائيًا لكون الموظف خرج متأخرًا
-                        daily.ApprovedOvertimeMinutes = existing?.ApprovedOvertimeMinutes ?? 0;
+                        daily.ApprovedOvertimeMinutes = classification.HasIncompletePunches ? 0
+                            : Math.Clamp(existing?.ApprovedOvertimeMinutes ?? 0, 0, classification.CalculatedOvertimeMinutes);
                         daily.PaidOvertimeMinutes = 0;
                         daily.PunchReviewStatus = classification.Status;
                         daily.HasIncompletePunches = classification.HasIncompletePunches;
@@ -475,11 +526,14 @@ public class AttendanceProcessingService
 
         // حذف الأحداث القديمة غير اليدوية للأيام التي نعيد معالجتها ولم تعد بصماتها ضمن اليوم
         var keys = dailyUpdates.Keys.ToHashSet();
+        var manuallyCorrectedKeys = existingDaily.Where(d => d.IsManualOverride)
+            .Select(d => (d.EmployeeId, d.WorkDate.Date)).ToHashSet();
         var keptPunchIds = newEvents.Select(n => n.RawPunchId)
             .Concat(updatedEvents.Select(e => e.RawPunchId))
             .ToHashSet();
         var oldEvents = existingEvents
             .Where(e => !e.IsManual
+                        && !manuallyCorrectedKeys.Contains((e.EmployeeId, e.WorkDate.Date))
                         && !updatedEvents.Contains(e)
                         && keys.Contains((e.EmployeeId, e.WorkDate.Date))
                         && !keptPunchIds.Contains(e.RawPunchId))
@@ -490,6 +544,7 @@ public class AttendanceProcessingService
         foreach (var kv in dailyUpdates)
             if (!dailyByKey.ContainsKey(kv.Key)) _db.DailyAttendances.Add(kv.Value);
 
+        await PayrollEvidenceGuard.MarkAttendanceChangesAsync(_db,user,ct);
         await _db.SaveChangesAsync(ct);
         result.EventsCreated = newEvents.Count + updatedEvents.Count;
 
@@ -506,6 +561,7 @@ public class AttendanceProcessingService
         }
         await _db.SaveChangesAsync(ct);
 
+        await transaction.CommitAsync(ct);
         _logger.LogInformation(
             "معالجة الحضور: {Days} يوم، {Events} حدث، {Review} حالة مراجعة",
             result.DaysProcessed, result.EventsCreated, result.ReviewCases);

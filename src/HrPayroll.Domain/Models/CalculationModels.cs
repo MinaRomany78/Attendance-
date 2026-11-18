@@ -9,6 +9,12 @@ namespace HrPayroll.Domain.Models;
 /// </summary>
 public sealed class AttendancePolicy
 {
+    public HourRoundingPolicy HourRounding { get; init; } = new();
+    public bool RoundedAttendanceDeductionsEnabled { get; init; }
+    public bool RoundedOvertimeEnabled { get; init; }
+    public AttendanceDeductionBasis AttendanceDeductionBasis { get; init; } = AttendanceDeductionBasis.Unspecified;
+    public GracePeriodMode GracePeriodMode { get; init; } = GracePeriodMode.Threshold;
+
     /// <summary>عدد أيام الشهر المستخدم لحساب الأجر اليومي (افتراضي 30).</summary>
     public int WorkDaysPerMonth { get; init; } = 30;
 
@@ -21,8 +27,14 @@ public sealed class AttendancePolicy
     /// <summary>هل يُحتسب خصم التأخير من الراتب؟</summary>
     public bool LateDeductionEnabled { get; init; } = true;
 
+    /// <summary>خصم الانصراف المبكر بالدقيقة، دون تفعيل تقريب أو عقوبة إضافية.</summary>
+    public bool EarlyLeaveDeductionEnabled { get; init; }
+
     /// <summary>هل يُحتسب خصم الغياب من الراتب؟</summary>
     public bool AbsenceDeductionEnabled { get; init; } = true;
+
+    /// <summary>سقف أيام الغياب المالي؛ صفر يحفظ سياسة الخصم لكل الأيام المسجلة دون سقف.</summary>
+    public int AbsenceDeductionMaxDays { get; init; }
 
     /// <summary>هل يُحتسب خصم الإجازة بدون أجر؟</summary>
     public bool UnpaidLeaveDeductionEnabled { get; init; } = true;
@@ -134,14 +146,28 @@ public sealed class DayClassificationResult
 /// <summary>مدخلات حساب راتب موظف واحد في شهر.</summary>
 public sealed class PayrollInputs
 {
+    public bool AllowNegativeNetSalary { get; init; }
+
     public decimal BasicSalary { get; init; }
     public decimal? DailyRateOverride { get; init; }
     public decimal StandardWorkHours { get; init; } = 8m;
 
     public int LateMinutes { get; init; }
+    public int EarlyLeaveMinutes { get; init; }
     public int RawOvertimeMinutes { get; init; }
     public int ApprovedOvertimeMinutes { get; init; }
     public int PaidOvertimeMinutes { get; init; }
+    public bool HasExplicitPaidOvertimeMinutes { get; init; }
+    public IReadOnlyList<PayrollAttendanceDuration> AttendanceDurations { get; init; } = Array.Empty<PayrollAttendanceDuration>();
+    public IReadOnlyList<PayrollOvertimeDuration> ApprovedOvertimeDurations { get; init; } = Array.Empty<PayrollOvertimeDuration>();
+    public decimal? SavedAttendanceDeduction { get; init; }
+    public decimal? SavedEarlyLeaveDeduction { get; init; }
+    public decimal? SavedShortageDeduction { get; init; }
+    public decimal? SavedOvertimeAmount { get; init; }
+    public decimal? SavedPaidOvertimeHours { get; init; }
+    public decimal? HourlyRateOverride { get; init; }
+    public decimal? MinuteRateOverride { get; init; }
+    public PayrollDurationSnapshot? DurationSnapshotOverride { get; init; }
 
     public int AttendanceDays { get; init; }
     public int PaidRestDays { get; init; }
@@ -203,6 +229,12 @@ public sealed record PayrollComputation(
 {
     /// <summary>الإجمالي قبل أي خصم (يحفظ للتوافق مع الحقل القديم).</summary>
     public decimal GrossSalary => GrossEarnings;
+    public PayrollDurationSnapshot Duration { get; init; } = new();
+    public int EarlyLeaveMinutes { get; init; }
+    public decimal EarlyLeaveDeduction { get; init; }
+    public decimal ShortageDeduction { get; init; }
+    public decimal ChargeableAbsenceDays { get; init; }
+    public decimal AttendanceDeductions => LateDeduction + EarlyLeaveDeduction + ShortageDeduction;
 
     public static string SerializeDetails(object details) =>
         JsonSerializer.Serialize(details, new JsonSerializerOptions { WriteIndented = false });

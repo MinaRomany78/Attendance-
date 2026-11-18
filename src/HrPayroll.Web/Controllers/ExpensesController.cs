@@ -1,5 +1,7 @@
+using HrPayroll.Domain.Models;
 using HrPayroll.Domain.Entities;
 using HrPayroll.Domain.Enums;
+using HrPayroll.Domain.Services;
 using HrPayroll.Infrastructure.Persistence;
 using HrPayroll.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -29,7 +31,8 @@ public class ExpensesController : Controller
 
     public async Task<IActionResult> Index(int? year, int? month, int? employeeId, string? search, CancellationToken ct)
     {
-        var y = year ?? DateTime.Today.Year;
+        var current = await CompanyPayrollClock.CurrentAsync(_db,ct);
+        var y = year ?? current.Year;
         var q = _db.EmployeeExpenses.Include(e => e.Employee).AsNoTracking().Where(e => e.Year == y);
         if (month.HasValue) q = q.Where(e => e.Month == month.Value);
         if (employeeId.HasValue) q = q.Where(e => e.EmployeeId == employeeId.Value);
@@ -52,9 +55,10 @@ public class ExpensesController : Controller
     public async Task<IActionResult> Create(CancellationToken ct)
     {
         await FillAsync(null, ct);
+        var today = await CompanyPayrollClock.TodayAsync(_db,ct); var period = PayrollPeriod.FromDate(today);
         return View("Form", new EmployeeExpense
         {
-            ExpenseDate = DateTime.Today, Month = DateTime.Today.Month, Year = DateTime.Today.Year, Currency = "EGP"
+            ExpenseDate = today, Month = period.Month, Year = period.Year, Currency = "EGP"
         });
     }
 
@@ -62,11 +66,14 @@ public class ExpensesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(EmployeeExpense model, CancellationToken ct)
     {
-        model.Month = model.ExpenseDate.Month;
-        model.Year = model.ExpenseDate.Year;
-        Validate(model);
+        if (model.ExpenseDate.Year is < 2 or > 9998) ModelState.AddModelError(nameof(model.ExpenseDate),"التاريخ غير صالح.");
+        else { model.Month = PayrollPeriod.FromDate(model.ExpenseDate).Month; model.Year = PayrollPeriod.FromDate(model.ExpenseDate).Year; }
+        await ValidateAsync(model, ct);
         if (!ModelState.IsValid) { await FillAsync(model.SalaryAdvanceId, ct); return View("Form", model); }
 
+        model.Id = 0; model.Employee = null; model.PayrollItem = null; model.PayrollItemId = null;
+        model.SalaryAdvance = null; model.Status = ApprovalStatus.Pending; model.ApprovedBy = null; model.ApprovedAt = null;
+        if (model.SettlementMode != ExpenseSettlementMode.IncludedInAdvance) model.SalaryAdvanceId = null;
         model.CreatedBy = this.CurrentUserName();
         _db.EmployeeExpenses.Add(model);
         await _db.SaveChangesAsync(ct);
@@ -81,7 +88,7 @@ public class ExpensesController : Controller
     {
         var e = await _db.EmployeeExpenses.FindAsync(new object?[] { id }, ct);
         if (e is null) return NotFound();
-        if (e.PayrollItemId.HasValue)
+        if (e.PayrollItemId.HasValue || await FinancialPeriodGuard.IsProtectedAsync(_db, e.Year, e.Month, ct))
         {
             TempData["Error"] = "لا يمكن تعديل مصروف تمت تسويته في كشف رواتب.";
             return RedirectToAction(nameof(Index));
@@ -97,14 +104,14 @@ public class ExpensesController : Controller
         if (id != model.Id) return BadRequest();
         var e = await _db.EmployeeExpenses.FindAsync(new object?[] { id }, ct);
         if (e is null) return NotFound();
-        if (e.PayrollItemId.HasValue)
+        if (e.PayrollItemId.HasValue || await FinancialPeriodGuard.IsProtectedAsync(_db, e.Year, e.Month, ct))
         {
             TempData["Error"] = "لا يمكن تعديل مصروف تمت تسويته في كشف رواتب.";
             return RedirectToAction(nameof(Index));
         }
-        model.Month = model.ExpenseDate.Month;
-        model.Year = model.ExpenseDate.Year;
-        Validate(model);
+        if (model.ExpenseDate.Year is < 2 or > 9998) ModelState.AddModelError(nameof(model.ExpenseDate),"التاريخ غير صالح.");
+        else { model.Month = PayrollPeriod.FromDate(model.ExpenseDate).Month; model.Year = PayrollPeriod.FromDate(model.ExpenseDate).Year; }
+        await ValidateAsync(model, ct);
         if (!ModelState.IsValid) { await FillAsync(model.SalaryAdvanceId, ct); return View("Form", model); }
 
         var old = $"{e.Amount:N2}/{e.Status}/{e.SettlementMode}";
@@ -132,7 +139,7 @@ public class ExpensesController : Controller
     {
         var e = await _db.EmployeeExpenses.FindAsync(new object?[] { id }, ct);
         if (e is null) return NotFound();
-        if (e.PayrollItemId.HasValue)
+        if (e.PayrollItemId.HasValue || await FinancialPeriodGuard.IsProtectedAsync(_db, e.Year, e.Month, ct))
         {
             TempData["Error"] = "لا يمكن تغيير اعتماد مصروف تمت تسويته في كشف رواتب.";
             return RedirectToAction(nameof(Index));
@@ -169,12 +176,27 @@ public class ExpensesController : Controller
             "Id", "Text", advanceId);
     }
 
-    private void Validate(EmployeeExpense model)
+    private async Task ValidateAsync(EmployeeExpense model, CancellationToken ct)
     {
+        model.Amount = PayrollCalculator.Round2(model.Amount);
         if (model.Amount <= 0) ModelState.AddModelError(nameof(EmployeeExpense.Amount), "المبلغ يجب أن يكون أكبر من صفر");
         if (string.IsNullOrWhiteSpace(model.Category)) ModelState.AddModelError(nameof(EmployeeExpense.Category), "الفئة مطلوبة");
         if (model.ExpenseDate.Date > DateTime.Today) ModelState.AddModelError(nameof(EmployeeExpense.ExpenseDate), "تاريخ المصروف لا يمكن أن يكون في المستقبل");
         if (model.SettlementMode == ExpenseSettlementMode.IncludedInAdvance && !model.SalaryAdvanceId.HasValue)
             ModelState.AddModelError(nameof(EmployeeExpense.SalaryAdvanceId), "اختر السلفة المشمول فيها هذا المصروف");
+        if (!Enum.IsDefined(model.SettlementMode)) ModelState.AddModelError(nameof(model.SettlementMode), "طريقة التسوية غير صالحة.");
+        if (!await _db.Employees.AnyAsync(e => e.Id == model.EmployeeId, ct))
+            ModelState.AddModelError(nameof(model.EmployeeId), "الموظف غير موجود.");
+        if (!string.Equals(model.Currency, "EGP", StringComparison.OrdinalIgnoreCase))
+            ModelState.AddModelError(nameof(model.Currency), "عملة المصروف يجب أن تكون EGP؛ لا توجد سياسة تحويل عملات معتمدة.");
+        if (await FinancialPeriodGuard.IsProtectedAsync(_db, model.Year, model.Month, ct))
+            ModelState.AddModelError(string.Empty, "الفترة مرتبطة بكشف رواتب معتمد أو مقفل.");
+        if (model.SettlementMode == ExpenseSettlementMode.IncludedInAdvance && model.SalaryAdvanceId.HasValue)
+        {
+            var advance = await _db.SalaryAdvances.AsNoTracking().FirstOrDefaultAsync(a => a.Id == model.SalaryAdvanceId, ct);
+            if (advance is null || advance.EmployeeId != model.EmployeeId || advance.Year != model.Year || advance.Month != model.Month
+                || advance.Status is not (SalaryAdvanceStatus.Approved or SalaryAdvanceStatus.Paid))
+                ModelState.AddModelError(nameof(model.SalaryAdvanceId), "يجب أن تكون السلفة لنفس الموظف والفترة وأن تكون معتمدة أو مدفوعة.");
+        }
     }
 }

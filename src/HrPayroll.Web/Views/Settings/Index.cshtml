@@ -33,11 +33,22 @@
             </span>
         </div>
         <form method="post" asp-action="Save">
+            <div class="section-title">تقريب الساعات للعرض فقط</div>
+            <div class="form-grid">
+                <div class="field"><label>طريقة التقريب</label><select name="values[@SettingKeys.DisplayHourRoundingMode]">
+                <option value="Up" selected="@(policy?.HourRounding.Mode == HourRoundingMode.Up)">لأعلى</option>
+                <option value="Down" selected="@(policy?.HourRounding.Mode == HourRoundingMode.Down)">لأسفل</option>
+                <option value="Nearest" selected="@(policy?.HourRounding.Mode == HourRoundingMode.Nearest)">للأقرب</option></select></div>
+                <div class="field"><label>خطوة التقريب</label><select name="values[@SettingKeys.DisplayHourRoundingIncrement]">
+                <option value="0.25" selected="@(policy?.HourRounding.IncrementHours == 0.25m)">ربع ساعة</option>
+                <option value="0.5" selected="@(policy?.HourRounding.IncrementHours == 0.5m)">نصف ساعة</option>
+                <option value="1" selected="@(policy?.HourRounding.IncrementHours == 1m)">ساعة</option></select></div>
+            </div><p class="hint">القيم المقربة تظهر في تفاصيل الحضور. الدقائق الأصلية وسياسة الخصم المالي الحالية محفوظة؛ هذا الاختيار لا يفعّل خصومات مالية جديدة.</p>
             <div class="section-title">سياسة الأجر والإضافي</div>
             <div class="form-grid">
                 <div class="field">
                     <label>عدد أيام الشهر (للأجر اليومي)</label>
-                    <input type="number" name="values[@SettingKeys.WorkDaysPerMonth]" value="@Val(SettingKeys.WorkDaysPerMonth, "30")" min="1" max="31" />
+                    <input type="number" name="values[@SettingKeys.WorkDaysPerMonth]" value="30" min="30" max="30" readonly />
                     <span class="hint">الأجر اليومي = الراتب الأساسي ÷ هذا الرقم (افتراضي 30).</span>
                 </div>
                 <div class="field">
@@ -87,6 +98,19 @@
                         <option value="false" selected="@(policy?.AbsenceDeductionEnabled == false)">معطّل</option>
                     </select>
                     <span class="hint">سعر اليوم = الأجر اليومي للموظف.</span>
+                </div>
+                <div class="field">
+                    <label>سقف أيام خصم الغياب في الدورة</label>
+                    <input name="values[Payroll.AbsenceDeductionMaxDays]" type="number" min="0" max="31" value="@Val("Payroll.AbsenceDeductionMaxDays","0")" />
+                    <span class="hint">0 يحافظ على السياسة الحالية دون سقف. أدخل 30 لحصر خصم الغياب في 30 يوماً؛ لا تتغير سجلات الحضور الفعلية في دورة من 31 يوماً.</span>
+                </div>
+                <div class="field">
+                    <label>خصم الانصراف المبكر</label>
+                    <select name="values[Payroll.EarlyLeaveDeductionEnabled]">
+                        <option value="true" selected="@(Val("Payroll.EarlyLeaveDeductionEnabled", "true") == "true")">مُفعّل</option>
+                        <option value="false" selected="@(Val("Payroll.EarlyLeaveDeductionEnabled", "true") == "false")">معطّل</option>
+                    </select>
+                    <span class="hint">دقائق الانصراف المبكر المستحقة × أجر الدقيقة بعد تطبيق فترة السماح الحالية. لا يضاف الخصم مرة أخرى عند احتساب نقص الوردية الشامل.</span>
                 </div>
                 <div class="field">
                     <label>السماح باحتساب كشف بلا بيانات حضور</label>

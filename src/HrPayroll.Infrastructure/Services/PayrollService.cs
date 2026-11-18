@@ -30,6 +30,8 @@ internal sealed class ManualCarry
     public decimal Allowances { get; init; }
     public decimal OtherDeductions { get; init; }
     public decimal LoansTotal { get; init; }
+    public decimal? SystemFinancialDeductions { get; init; }
+    public decimal? EmployeeExpenseRecoveries { get; init; }
     public decimal AdditionalDaysCount { get; init; }
     public decimal? AdditionalDaysRate { get; init; }
     public decimal? ManualOvertimeHours { get; init; }
@@ -64,19 +66,21 @@ public class PayrollService
     private readonly SettingsService _settings;
     private readonly AuditService _audit;
     private readonly ILogger<PayrollService> _logger;
+    private readonly TimeProvider _clock;
 
-    public PayrollService(AppDbContext db, SettingsService settings, AuditService audit, ILogger<PayrollService> logger)
+    public PayrollService(AppDbContext db, SettingsService settings, AuditService audit, ILogger<PayrollService> logger, TimeProvider? clock = null)
     {
         _db = db;
         _settings = settings;
         _audit = audit;
         _logger = logger;
+        _clock = clock ?? TimeProvider.System;
     }
 
     private static (DateTime First, DateTime Last) Period(int year, int month)
     {
-        var first = new DateTime(year, month, 1);
-        return (first, first.AddMonths(1).AddDays(-1));
+        var period = PayrollPeriod.ForMonth(year,month);
+        return (period.Start,period.End);
     }
 
     /// <summary>الراتب الشهري المستخدم للموظف في الفترة (حسب تاريخ التعيين/إنهاء الخدمة).</summary>
@@ -139,12 +143,22 @@ public class PayrollService
         if (month is < 1 or > 12) throw new ArgumentOutOfRangeException(nameof(month));
 
         var policy = await _settings.GetPolicyAsync(ct);
+        var companyToday = await CompanyPayrollClock.TodayAsync(_db, ct, _clock);
         var requireApproval = await _settings.GetBoolAsync(SettingKeys.RequireOvertimeApproval, true, ct);
         var (first, last) = Period(year, month);
         var result = new PayrollGenerationResult();
 
+        await FinancialPeriodGuard.EnsureEditableAsync(_db, first, last, ct);
+        var legacyRuns = await _db.PayrollRuns.AsNoTracking().Where(r=>r.PeriodStart==null && r.Status!=PayrollStatus.Cancelled).ToListAsync(ct);
+        if (legacyRuns.Any(r=>PayrollPeriod.ForRun(r).Overlaps(first,last)))
+            throw new InvalidOperationException("دورة 26–25 تتداخل مع كشف تاريخي. يلزم حل التعارض عبر إعادة الفتح/الإلغاء المعتمد دون تغيير التاريخ تلقائياً.");
         var existing = await _db.PayrollRuns.Where(r => r.Year == year && r.Month == month).ToListAsync(ct);
 
+        if (existing.Any(r => r.Status != PayrollStatus.Cancelled && (r.PeriodStart != first || r.PeriodEnd != last)))
+            throw new InvalidOperationException("يوجد كشف تاريخي بنطاق مختلف. لا يمكن استبدال نطاقه تلقائياً؛ يلزم تصحيح معتمد قبل توليد الدورة الجديدة.");
+        if (await _db.SalaryAdvances.AnyAsync(a => a.Status == SalaryAdvanceStatus.Paid && a.PayrollItemId == null && a.PeriodStart == null
+            && (a.Year == year && a.Month == month || a.CutoffDate >= first && a.CutoffDate <= last), ct))
+            throw new InvalidOperationException("توجد سلف تاريخية مصروفة تحتاج تحديد دورة التسوية قبل احتساب رواتب 26–25.");
         var locked = existing.FirstOrDefault(r => r.Status is PayrollStatus.Approved or PayrollStatus.Locked);
         if (locked is not null)
             throw new InvalidOperationException(
@@ -186,7 +200,8 @@ public class PayrollService
                     Bonuses = latest.Bonuses,
                     Allowances = latest.Allowances,
                     OtherDeductions = latest.OtherDeductions,
-                    LoansTotal = latest.LoansTotal,
+                    LoansTotal = latest.LoansTotal, SystemFinancialDeductions = latest.SystemFinancialDeductions,
+                    EmployeeExpenseRecoveries = latest.EmployeeExpenseRecoveries,
                     AdditionalDaysCount = latest.AdditionalDaysCount,
                     AdditionalDaysRate = latest.AdditionalDaysRate,
                     ManualOvertimeHours = latest.ManualOvertimeHours,
@@ -196,7 +211,8 @@ public class PayrollService
             }
         }
 
-        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+        await using var tx = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        await FinancialPeriodGuard.EnsureEditableAsync(_db, first, last, ct);
 
         // أرشفة الكشوف السابقة وفصل ارتباطاتها حتى لا تُخصم/تُضاف المكوّنات مرتين
         foreach (var oldRun in existing.Where(r => r.Status != PayrollStatus.Cancelled))
@@ -212,6 +228,7 @@ public class PayrollService
         {
             Year = year,
             Month = month,
+            PeriodStart = first, PeriodEnd = last,
             Status = PayrollStatus.Computed,
             Version = previousVersion + 1,
             ComputedAt = DateTime.UtcNow,
@@ -232,10 +249,12 @@ public class PayrollService
             .ToListAsync(ct);
 
         // ===== الإضافي المعتمد =====
-        var approvedApprovals = await _db.OvertimeApprovals.AsNoTracking()
+        if (await _db.OvertimeApprovals.AnyAsync(o=>employeeIds.Contains(o.EmployeeId) && o.Status==ApprovalStatus.Approved
+            && o.PayrollItemId==null && o.PeriodStart<=last && o.PeriodEnd>=first && (o.PeriodStart<first || o.PeriodEnd>last),ct))
+            throw new InvalidOperationException("يوجد اعتماد إضافي إجمالي يتجاوز حدود الدورة. يلزم تفصيل الاعتماد حسب 26–25 قبل الاحتساب.");
+        var approvedApprovals = await _db.OvertimeApprovals
             .Where(o => employeeIds.Contains(o.EmployeeId) && o.Status == ApprovalStatus.Approved
-                        && o.PeriodStart >= first && o.PeriodEnd <= last && o.PayrollItemId == null)
-            .Select(o => new { o.EmployeeId, o.ApprovedHours })
+                        && o.PeriodStart >= first && o.PeriodEnd <= last && o.PeriodEnd <= companyToday && o.PayrollItemId == null)
             .ToListAsync(ct);
         var approvalHoursByEmp = approvedApprovals
             .GroupBy(o => o.EmployeeId)
@@ -250,7 +269,8 @@ public class PayrollService
         // سلف منتصف الشهر المدفوعة وغير المُسوَّاة تُسترد من كشف نفس الشهر.
         var midAdvances = await _db.SalaryAdvances
             .Where(a => employeeIds.Contains(a.EmployeeId) && a.Year == year && a.Month == month
-                        && a.Status == SalaryAdvanceStatus.Paid && a.PayrollItemId == null)
+                        && a.PeriodStart == first && a.PeriodEnd == last
+                        && (a.Status == SalaryAdvanceStatus.Paid || a.Status == SalaryAdvanceStatus.Registered) && a.PayrollItemId == null)
             .ToListAsync(ct);
 
         // مصاريف الموظفين المعتمدة القابلة للخصم وغير المُسوَّاة.
@@ -263,6 +283,9 @@ public class PayrollService
             .ToListAsync(ct);
 
         // أقساط القروض المجدولة: تُنشأ صفوف الاستحقاق للشهر عند الحاجة (قسط واحد لكل قرض×شهر).
+        if (await _db.Loans.AnyAsync(l => employeeIds.Contains(l.EmployeeId) && l.Status == ApprovalStatus.Approved
+            && !l.IsPaused && (l.Installments > 1 || l.InstallmentAmount > 0) && (l.RepaymentStartYear < 1 || l.RepaymentStartMonth < 1 || l.RepaymentStartMonth > 12), ct))
+            throw new InvalidOperationException("يوجد قرض بأقساط دون تاريخ بداية سداد صحيح. اضبط سنة وشهر بداية السداد قبل احتساب الرواتب؛ لن يُخصم كامل القرض تلقائياً.");
         var scheduledLoans = await _db.Loans
             .Where(l => employeeIds.Contains(l.EmployeeId) && l.Status == ApprovalStatus.Approved
                         && !l.IsPaused && (l.Installments > 1 || l.InstallmentAmount > 0)
@@ -283,25 +306,29 @@ public class PayrollService
         // الإجازات المعتمدة التي تغطي أيامًا داخل الفترة ولم تُستهلك في كشف سابق
         var leaves = await _db.LeaveRequests
             .Where(l => employeeIds.Contains(l.EmployeeId) && l.Status == ApprovalStatus.Approved
-                        && l.StartDate <= last && l.EndDate >= first && l.PayrollItemId == null)
+                        && l.StartDate <= last && l.EndDate >= first)
             .ToListAsync(ct);
 
+        var restDays = await _settings.GetWeeklyRestDaysAsync(ct);
+        var holidayDates = (await _db.PublicHolidays.AsNoTracking().Where(h=>h.IsActive && h.HolidayDate>=first && h.HolidayDate<=last)
+            .Select(h=>h.HolidayDate).ToListAsync(ct)).Select(d=>d.Date).ToHashSet();
         var lockedAt = DateTime.UtcNow;
 
         foreach (var emp in employees)
         {
-            var empDays = daily.Where(d => d.EmployeeId == emp.Id).ToList();
+            var empDays = daily.Where(d => d.EmployeeId == emp.Id && d.WorkDate <= companyToday && d.WorkDate >= emp.HireDate.Date && (!emp.TerminationDate.HasValue || d.WorkDate <= emp.TerminationDate.Value.Date)).ToList();
             var empLeaves = leaves.Where(l => l.EmployeeId == emp.Id).ToList();
+            var coverage = PayrollCoverage.Calculate(emp, new PayrollPeriod(first, last), companyToday, empDays, empLeaves, restDays, holidayDates);
 
             // أيام الحضور الفعلي
-            var attendanceDays = empDays.Count(d => d.CheckInTime.HasValue);
+            var attendanceDays = coverage.WorkedDays;
 
             // أيام الراحة والعطلات والغياب
-            var paidRestDays = empDays.Count(d => d.Status == AttendanceStatus.RestDay && !d.CheckInTime.HasValue);
+            var paidRestDays = coverage.PaidRestDays;
             var paidHolidayDays = empDays.Count(d => d.Status == AttendanceStatus.Holiday && !d.CheckInTime.HasValue);
 
             // تصنيف الإجازات: نعتمد على أيام الحضور المُصنَّفة، مع الرجوع لطلبات الإجازة عند عدم وجود أيام
-            var paidLeaveDays = empDays.Count(d => d.Status == AttendanceStatus.PaidLeave) / 1m;
+            var paidLeaveDays = coverage.PaidLeaveDays;
             var unpaidLeaveDays = empDays.Count(d => d.Status == AttendanceStatus.UnpaidLeave) / 1m;
 
             if (empDays.Count == 0 && empLeaves.Count > 0)
@@ -309,9 +336,11 @@ public class PayrollService
                 // لم تتم معالجة الحضور بعد: نستخدم أيام العمل من طلبات الإجازة
                 foreach (var l in empLeaves)
                 {
-                    var days = l.WorkingDays > 0 ? l.WorkingDays : l.DaysCount;
-                    if (l.IsPaid && l.LeaveType != LeaveType.Unpaid) paidLeaveDays += days;
-                    else unpaidLeaveDays += days;
+                    if (l.WorkingDays != decimal.Truncate(l.WorkingDays)) throw new InvalidOperationException("الإجازة الجزئية تحتاج تفصيلاً يومياً معتمداً قبل توزيعها على الدورة.");
+                    var start = new[] { first,emp.HireDate.Date,l.StartDate.Date }.Max();
+                    var end = new[] { last, companyToday, emp.TerminationDate?.Date ?? last,l.EndDate.Date }.Min();
+                    var days = WorkingDayCalculator.Count(start,end,restDays,holidayDates);
+                    if (!l.IsPaid || l.LeaveType == LeaveType.Unpaid) unpaidLeaveDays += days;
                 }
             }
 
@@ -344,9 +373,9 @@ public class PayrollService
             }
 
             // التقريب يُطبَّق مرة واحدة على إجمالي الشهر (وليس على كل بصمة)
-            var paidOvertimeMinutes = requireApproval
-                ? policy.RoundOvertimeMinutes(approvedOvertimeMinutes)
-                : policy.RoundOvertimeMinutes(rawOvertimeMinutes);
+            var paidOvertimeMinutes = policy.RoundedOvertimeEnabled
+                ? approvedOvertimeMinutes
+                : policy.RoundOvertimeMinutes(approvedOvertimeMinutes);
 
             var empLoans = loans.Where(l => l.EmployeeId == emp.Id).ToList();
             var empDeductions = deductions.Where(d => d.EmployeeId == emp.Id).ToList();
@@ -361,7 +390,7 @@ public class PayrollService
             var empOneShotLoans = empLoans.Where(l => !scheduledIds.Contains(l.Id)).ToList();
             var empRepayments = repayments.Where(r => r.EmployeeId == emp.Id).ToList();
             var loanInstallments = empRepayments.Sum(r => r.DueAmount);
-            var advanceRecoveries = empMidAdvances.Sum(a => a.PaidAmount);
+            var advanceRecoveries = empMidAdvances.Sum(a => a.Status == SalaryAdvanceStatus.Registered ? a.RegisteredAmount ?? 0m : a.PaidAmount);
             var expenseRecoveries = empExpenses.Sum(e => e.Amount);
 
             var bonuses = empAdjustments.Where(a => a.Type == AdjustmentType.Bonus).Sum(a => a.Amount);
@@ -376,15 +405,24 @@ public class PayrollService
             // معامل الإضافي: سياسة الشركة = 1 (بدون مضاعفة). الأفضلية لمعامل التسويات إن وُجد.
             var multiplier = policy.DefaultOvertimeMultiplier <= 0m ? 1m : policy.DefaultOvertimeMultiplier;
 
+            var entitlement = BasicSalaryEntitlement.Calculate(emp.BasicSalary,emp.HireDate,emp.TerminationDate,new PayrollPeriod(first,last));
             var inputs = new PayrollInputs
             {
-                BasicSalary = emp.BasicSalary,
-                DailyRateOverride = emp.DailyRate,
+                BasicSalary = entitlement.BasicSalary,
+                AllowNegativeNetSalary = true,
+                DailyRateOverride = policy.DailyRateFor(emp.BasicSalary,emp.DailyRate),
                 StandardWorkHours = emp.StandardWorkHours,
                 LateMinutes = lateMinutes,
+                EarlyLeaveMinutes = empDays.Where(d => d.IsPresent && !d.NeedsReview).Sum(d => d.EarlyLeaveMinutes),
                 RawOvertimeMinutes = rawOvertimeMinutes,
                 ApprovedOvertimeMinutes = approvedOvertimeMinutes,
                 PaidOvertimeMinutes = paidOvertimeMinutes,
+                HasExplicitPaidOvertimeMinutes = true,
+                AttendanceDurations = PayrollDurationCalculator.FromDaily(empDays),
+                ApprovedOvertimeDurations = dayApprovedMinutes > 0
+                    ? empDays.Where(d => d.ApprovedOvertimeMinutes > 0).Select(d => new PayrollOvertimeDuration(d.WorkDate, d.ApprovedOvertimeMinutes)).ToList()
+                    : !requireApproval ? empDays.Where(d => d.RawOvertimeMinutes > 0).Select(d => new PayrollOvertimeDuration(d.WorkDate, d.RawOvertimeMinutes)).ToList()
+                    : Array.Empty<PayrollOvertimeDuration>(),
                 AttendanceDays = attendanceDays,
                 PaidRestDays = paidRestDays,
                 PaidLeaveDays = paidLeaveDays,
@@ -414,22 +452,29 @@ public class PayrollService
                 inputs = new PayrollInputs
                 {
                     BasicSalary = inputs.BasicSalary,
+                    AllowNegativeNetSalary = inputs.AllowNegativeNetSalary,
                     DailyRateOverride = inputs.DailyRateOverride,
                     StandardWorkHours = inputs.StandardWorkHours,
                     LateMinutes = inputs.LateMinutes,
-                    RawOvertimeMinutes = Math.Max(inputs.RawOvertimeMinutes, carriedOvertimeMinutes),
+                    EarlyLeaveMinutes = inputs.EarlyLeaveMinutes,
+                    RawOvertimeMinutes = inputs.RawOvertimeMinutes,
                     ApprovedOvertimeMinutes = carriedOvertimeMinutes,
                     PaidOvertimeMinutes = carried.ManualOvertimeHours.HasValue
                         ? carriedOvertimeMinutes
                         : inputs.PaidOvertimeMinutes,
+                    HasExplicitPaidOvertimeMinutes = true,
+                    AttendanceDurations = inputs.AttendanceDurations,
+                    ApprovedOvertimeDurations = carried.ManualOvertimeHours.HasValue ? Array.Empty<PayrollOvertimeDuration>() : inputs.ApprovedOvertimeDurations,
                     AttendanceDays = inputs.AttendanceDays,
                     PaidRestDays = inputs.PaidRestDays,
                     PaidLeaveDays = inputs.PaidLeaveDays,
                     UnpaidLeaveDays = carried.UnpaidLeaveDays,
                     AbsenceDays = carried.AbsenceDays,
-                    Advances = carried.LoansTotal,
+                    Advances = carried.SystemFinancialDeductions.HasValue ? Math.Max(0, carried.LoansTotal - carried.SystemFinancialDeductions.Value) + inputs.Advances : Math.Max(carried.LoansTotal, inputs.Advances),
                     DeductionsTotal = inputs.DeductionsTotal,
-                    OtherDeductions = carried.OtherDeductions,
+                    OtherDeductions = carried.EmployeeExpenseRecoveries.HasValue
+                        ? Math.Max(0, carried.OtherDeductions - carried.EmployeeExpenseRecoveries.Value) + expenseRecoveries
+                        : Math.Max(carried.OtherDeductions, inputs.OtherDeductions),
                     Bonuses = carried.Bonuses,
                     Allowances = carried.Allowances,
                     AdditionalDays = carried.AdditionalDaysCount,
@@ -439,6 +484,14 @@ public class PayrollService
             }
 
             var computation = PayrollCalculator.Compute(inputs, policy);
+            var earnedBasic = EarnedSalaryCalculator.Calculate(emp.BasicSalary, computation.DailyRate,
+                coverage.WorkedDays, policy.MonthlySalaryIncludesPaidRestDays ? coverage.PaidRestDays : 0, coverage.PaidLeaveDays);
+            // Absence/unpaid days are already excluded from earned basic: never subtract them twice.
+            var earnedGross = PayrollCalculator.Round2(earnedBasic + computation.OvertimeAmount + computation.Bonuses
+                + computation.Allowances + computation.AdditionalDaysAmount);
+            var earnedDeductions = PayrollCalculator.Round2(computation.TotalDeductions - computation.AbsenceDeduction - computation.UnpaidLeaveDeduction
+                - empDeductions.Where(d => d.DeductionDate.Date > coverage.AsOf).Sum(d => d.Amount)
+                - empExpenses.Where(e => e.ExpenseDate.Date > coverage.AsOf).Sum(e => e.Amount));
 
             var item = new PayrollItem
             {
@@ -461,6 +514,9 @@ public class PayrollService
                 AbsenceDays = computation.AbsenceDays,
                 LateMinutes = computation.LateMinutes,
                 LateDeduction = computation.LateDeduction,
+                EarlyLeaveMinutes = computation.EarlyLeaveMinutes,
+                EarlyLeaveDeduction = computation.EarlyLeaveDeduction,
+                ShortageDeduction = computation.ShortageDeduction,
                 RawOvertimeMinutes = computation.RawOvertimeMinutes,
                 RawOvertimeHours = computation.RawOvertimeHours,
                 ApprovedOvertimeHours = computation.ApprovedOvertimeHours,
@@ -470,6 +526,8 @@ public class PayrollService
                 AbsenceDeduction = computation.AbsenceDeduction,
                 UnpaidLeaveDeduction = computation.UnpaidLeaveDeduction,
                 LoansTotal = computation.Advances,
+                SalaryAdvancesPaid = advanceRecoveries, LoanInstallments = loanInstallments,
+                LegacyLoanDeductions = empOneShotLoans.Sum(l => l.Amount), EmployeeExpenseRecoveries = expenseRecoveries,
                 DeductionsTotal = computation.DeductionsTotal,
                 OtherDeductions = computation.OtherDeductions,
                 Bonuses = computation.Bonuses,
@@ -480,6 +538,12 @@ public class PayrollService
                 TotalDeductions = computation.TotalDeductions,
                 GrossSalary = computation.GrossSalary,
                 NetSalary = computation.NetSalary,
+                UncoveredDeductions = Math.Max(0,computation.TotalDeductions-computation.GrossEarnings),
+                ContractBasicSalary = emp.BasicSalary, PayableBasicDays = entitlement.PayableDays,
+                EarningsAsOf = coverage.AsOf, EarnedBasicSalary = earnedBasic, EarnedGrossSalary = earnedGross,
+                EarnedDeductions = earnedDeductions, EarnedNetSalary = PayrollCalculator.Round2(earnedGross - earnedDeductions),
+                AttendanceMissingDays = coverage.MissingDays,
+                FinancialReviewReason = null,
                 OriginalAbsenceDays = absenceDays,
                 AnnualLeaveDays = carried?.AnnualLeaveDays ?? 0m,
                 AnnualLeaveBalanceApplied = carried?.AnnualLeaveBalanceApplied ?? 0m,
@@ -502,10 +566,13 @@ public class PayrollService
             foreach (var l in empOneShotLoans) l.PayrollItemId = item.Id;
             foreach (var d in empDeductions) d.PayrollItemId = item.Id;
             foreach (var a in empAdjustments) a.PayrollItemId = item.Id;
+            // Period approvals are either an alternative to daily approval or a reference
+            // to the same approved time. Linking both prevents reuse without adding them twice.
+            foreach (var approval in approvedApprovals.Where(o => o.EmployeeId == emp.Id)) approval.PayrollItemId = item.Id;
             foreach (var sa in empMidAdvances)
             {
                 sa.PayrollItemId = item.Id;
-                sa.Status = SalaryAdvanceStatus.Settled;
+                if (sa.Status != SalaryAdvanceStatus.Registered) sa.Status = SalaryAdvanceStatus.Settled;
             }
             foreach (var e in empExpenses) e.PayrollItemId = item.Id;
             // الأقساط المحصلة: تحديث حالة القسط ورصيد القرض (لا تتجاوز الرصيد المتبقي أبدًا).
@@ -528,18 +595,21 @@ public class PayrollService
             if (empDays.Count > 0)
             {
                 var usedLeaves = empDays.Where(d => d.LeaveRequestId.HasValue).Select(d => d.LeaveRequestId!.Value).ToHashSet();
-                foreach (var l in empLeaves.Where(l => usedLeaves.Contains(l.Id))) l.PayrollItemId = item.Id;
+                foreach (var l in empLeaves.Where(l => usedLeaves.Contains(l.Id) && l.EndDate.Date <= last && l.PayrollItemId == null)) l.PayrollItemId = item.Id;
             }
             else
             {
-                foreach (var l in empLeaves) l.PayrollItemId = item.Id;
+                foreach (var l in empLeaves.Where(l=>l.EndDate.Date<=last && l.PayrollItemId==null)) l.PayrollItemId = item.Id;
             }
 
+            if (item.NetSalary < 0) result.Warnings.Add($"{emp.EmployeeCode}: صافي سالب {item.NetSalary:N2}؛ فرق الخصومات {item.UncoveredDeductions:N2} محفوظ دون ترحيل تلقائي.");
+            if (coverage.MissingDays > 0 && result.Warnings.Count < 10) result.Warnings.Add($"{emp.EmployeeCode}: بيانات {coverage.MissingDays} يوم غير مكتملة حتى {coverage.AsOf:yyyy-MM-dd}. الصافي المعروض توقع للدورة؛ المستحق الفعلي منفصل ولا يمكن الإقفال قبل استكمال البيانات.");
             result.ItemCount++;
         }
 
         await _db.SaveChangesAsync(ct);
 
+        run.FinancialEvidenceHash = await PayrollFinancialEvidence.CalculateAsync(_db, run, ct);
         run.TotalNet = _db.PayrollItems.Local.Where(i => i.PayrollRunId == run.Id).Sum(i => i.NetSalary);
         run.TotalGross = _db.PayrollItems.Local.Where(i => i.PayrollRunId == run.Id).Sum(i => i.GrossEarnings);
         run.TotalOvertime = _db.PayrollItems.Local.Where(i => i.PayrollRunId == run.Id).Sum(i => i.OvertimeAmount);
@@ -573,6 +643,10 @@ public class PayrollService
         int year, int month, string? user, CancellationToken ct)
     {
         var result = new List<LoanRepayment>();
+        var loanIds = scheduledLoans.Select(l => l.Id).ToList();
+        var existingRepayments = await _db.LoanRepayments
+            .Where(r => loanIds.Contains(r.LoanId) && r.Year == year && r.Month == month)
+            .ToDictionaryAsync(r => r.LoanId, ct);
         foreach (var loan in scheduledLoans)
         {
             // القرض يبدأ السداد من شهر بدايته ولا يتجاوزه بأكثر من عدد الأقساط.
@@ -582,8 +656,7 @@ public class PayrollService
             if (loan.Installments > 0 && currentIndex >= startIndex + loan.Installments) continue;
             if (loan.OutstandingBalance <= 0) continue;
 
-            var existing = await _db.LoanRepayments.FirstOrDefaultAsync(
-                r => r.LoanId == loan.Id && r.Year == year && r.Month == month, ct);
+            existingRepayments.TryGetValue(loan.Id, out var existing);
             if (existing is not null)
             {
                 if (existing.Status == LoanRepaymentStatus.Due)
@@ -596,6 +669,11 @@ public class PayrollService
                 ? loan.InstallmentAmount
                 : (loan.Installments > 0 ? loan.Amount / loan.Installments : loan.Amount);
             var due = PayrollCalculator.Round2(Math.Min(baseDue, loan.OutstandingBalance));
+            // Settle only the final rounding cent, never collect skipped installments implicitly.
+            if (loan.InstallmentAmount <= 0m && loan.Installments > 0
+                && currentIndex == startIndex + loan.Installments - 1
+                && loan.OutstandingBalance <= due + 0.01m)
+                due = PayrollCalculator.Round2(loan.OutstandingBalance);
             if (due <= 0) continue;
 
             var row = new LoanRepayment
@@ -665,6 +743,42 @@ public class PayrollService
         => await _db.PayrollRuns.FirstOrDefaultAsync(r => r.Id == id, ct)
            ?? throw new InvalidOperationException("كشف الرواتب غير موجود");
 
+    private async Task ValidateFinalizationAsync(PayrollRun run, CancellationToken ct)
+    {
+        var period = PayrollPeriod.ForRun(run);
+        if (await CompanyPayrollClock.TodayAsync(_db, ct, _clock) < period.End)
+            throw new InvalidOperationException($"الدورة لم تنته بعد ({period.End:yyyy-MM-dd}). القيم الحالية توقعات وليست راتباً نهائياً.");
+        var items = await _db.PayrollItems.Where(i => i.PayrollRunId == run.Id).ToListAsync(ct);
+        if (items.Count == 0) throw new InvalidOperationException("لا توجد أسطر رواتب؛ احسب الكشف أولاً.");
+        var problems = items.Where(i => i.FinancialReviewReason != null || i.AttendanceMissingDays > 0
+            || i.AttendanceMissingDays == null)
+            .Select(i => $"{i.EmployeeCode}: {i.FinancialReviewReason ?? (i.AttendanceMissingDays.HasValue ? $"استكمل حضور {i.AttendanceMissingDays} يوم أو سجّل الغياب/الإجازة الصحيحة ثم أعد الحساب" : "أعد حساب الكشف لتوثيق اكتمال بيانات الحضور")}").Take(10).ToList();
+        if (problems.Count > 0) throw new InvalidOperationException("تعذر إقفال الرواتب: " + string.Join(" | ", problems));
+        if (await _db.LeaveRequests.AnyAsync(l => l.Status == ApprovalStatus.Pending && l.StartDate <= period.End && l.EndDate >= period.Start, ct))
+            throw new InvalidOperationException("احسم طلبات الإجازة المعلقة داخل الدورة ثم أعد حساب الرواتب قبل الإقفال.");
+        if (await _db.PayrollAdjustments.AnyAsync(a => a.Status == ApprovalStatus.Pending && a.Year == run.Year && a.Month == run.Month, ct))
+            throw new InvalidOperationException("توجد تسويات مالية معلقة؛ احسمها ثم أعد حساب الرواتب قبل الإقفال.");
+        await PayrollFinancialEvidence.EnsureCurrentAsync(_db, run, ct);
+    }
+
+    /// <summary>Single authorized close action, with technical validation and an audit trail.</summary>
+    public async Task FinalizeAsync(int payrollRunId, string? user, string? userId, CancellationToken ct = default)
+    {
+        await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var run = await GetRunAsync(payrollRunId, ct);
+        if (run.Status == PayrollStatus.Locked) return;
+        if (run.Status == PayrollStatus.Cancelled) throw new InvalidOperationException("الكشف ملغى؛ احسب كشفاً جديداً قبل الإقفال.");
+        await ValidateFinalizationAsync(run, ct);
+        var previous = run.Status.ToString();
+        run.Status = PayrollStatus.Locked;
+        run.ApprovedAt = run.LockedAt = DateTime.UtcNow;
+        run.ApprovedBy = run.LockedBy = user;
+        foreach (var item in await _db.PayrollItems.Where(i => i.PayrollRunId == run.Id).ToListAsync(ct)) item.Status = PayrollStatus.Locked;
+        await _audit.LogAsync("إقفال كشف الرواتب", nameof(PayrollRun), run.Id.ToString(), previous, "Locked", user, userId, ct);
+        await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+    }
+
     /// <summary>نقل الكشف إلى حالة "قيد المراجعة".</summary>
     public async Task MarkPendingReviewAsync(int payrollRunId, string? user, string? userId, CancellationToken ct = default)
     {
@@ -678,9 +792,18 @@ public class PayrollService
     /// <summary>اعتماد الكشف (يبقى قابلًا للقفل).</summary>
     public async Task ApproveAsync(int payrollRunId, string? user, string? userId, CancellationToken ct = default)
     {
+        await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         var run = await GetRunAsync(payrollRunId, ct);
+        if (run.PeriodEnd.HasValue && await CompanyPayrollClock.TodayAsync(_db,ct,_clock) < run.PeriodEnd.Value.Date)
+            throw new InvalidOperationException("لا يمكن إغلاق أو اعتماد دورة رواتب قبل تاريخ انتهائها.");
         if (run.Status == PayrollStatus.Approved) return;
+        if (run.Status is PayrollStatus.Locked or PayrollStatus.Cancelled)
+            throw new InvalidOperationException("لا يمكن اعتماد كشف مقفل أو ملغى. استخدم سير العمل المعتمد لإعادة الفتح أو الاحتساب.");
 
+        if (await _db.PayrollItems.AnyAsync(i => i.PayrollRunId == payrollRunId && i.FinancialReviewReason != null,ct))
+            throw new InvalidOperationException("لا يمكن اعتماد الكشف قبل حل مراجعة الأجر الجزئي أو فرق الخصومات الزائدة. لا يُرحّل الفرق تلقائياً.");
+        await PayrollFinancialEvidence.EnsureCurrentAsync(_db,run,ct);
+        await ValidateFinalizationAsync(run, ct);
         run.Status = PayrollStatus.Approved;
         run.ApprovedAt = DateTime.UtcNow;
         run.ApprovedBy = user;
@@ -690,16 +813,24 @@ public class PayrollService
 
         await _audit.LogAsync("اعتماد كشف رواتب", nameof(PayrollRun), run.Id.ToString(), "Computed", "Approved", user, userId, ct);
         await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 
     /// <summary>قفل الكشف نهائيًا (يمنع أي إعادة احتساب تلقائية).</summary>
     public async Task LockAsync(int payrollRunId, string? user, string? userId, CancellationToken ct = default)
     {
+        await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         var run = await GetRunAsync(payrollRunId, ct);
+        if (run.PeriodEnd.HasValue && await CompanyPayrollClock.TodayAsync(_db,ct,_clock) < run.PeriodEnd.Value.Date)
+            throw new InvalidOperationException("لا يمكن إغلاق أو اعتماد دورة رواتب قبل تاريخ انتهائها.");
         if (run.Status == PayrollStatus.Locked) return;
         if (run.Status != PayrollStatus.Approved)
             throw new InvalidOperationException("لا يمكن قفل الكشف قبل اعتماده.");
 
+        await ValidateFinalizationAsync(run, ct);
+
+        if (await _db.PayrollItems.AnyAsync(i => i.PayrollRunId == payrollRunId && i.FinancialReviewReason != null,ct))
+            throw new InvalidOperationException("الكشف يحتوي فروقاً مالية تحتاج حلاً معتمداً قبل القفل.");
         run.Status = PayrollStatus.Locked;
         run.LockedAt = DateTime.UtcNow;
         run.LockedBy = user;
@@ -709,6 +840,7 @@ public class PayrollService
 
         await _audit.LogAsync("قفل كشف رواتب", nameof(PayrollRun), run.Id.ToString(), "Approved", "Locked", user, userId, ct);
         await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
     }
 
     /// <summary>إعادة فتح كشف مقفل بسبب مُسجَّل (تصحيح معتمد فقط).</summary>
@@ -736,8 +868,8 @@ public class PayrollService
     public async Task CancelAsync(int payrollRunId, string? user, string? userId, CancellationToken ct = default)
     {
         var run = await GetRunAsync(payrollRunId, ct);
-        if (run.Status == PayrollStatus.Locked)
-            throw new InvalidOperationException("لا يمكن إلغاء كشف مقفل. أعد فتحه أولًا بسبب مُسجَّل.");
+        if (run.IsLocked)
+            throw new InvalidOperationException("لا يمكن إلغاء كشف معتمد أو مقفل. أعد فتحه أولًا بسبب مُسجَّل.");
 
         var itemIds = await _db.PayrollItems.Where(i => i.PayrollRunId == payrollRunId).Select(i => i.Id).ToListAsync(ct);
         await UnlinkAsync(itemIds, ct);

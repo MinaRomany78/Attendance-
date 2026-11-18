@@ -1,3 +1,4 @@
+using HrPayroll.Domain.Models;
 using HrPayroll.Domain.Enums;
 using HrPayroll.Infrastructure.Persistence;
 using HrPayroll.Infrastructure.Services;
@@ -78,10 +79,12 @@ public class AttendanceController : Controller
     /// <summary>الحضور الشهري: مصفوفة موظف × يوم مع مفتاح الحالات بالعربية.</summary>
     public async Task<IActionResult> Monthly(int? year, int? month, string? department, string? search, CancellationToken ct)
     {
-        var y = year ?? DateTime.Today.Year;
-        var m = month is >= 1 and <= 12 ? month.Value : DateTime.Today.Month;
-        var first = new DateTime(y, m, 1);
-        var days = Enumerable.Range(0, DateTime.DaysInMonth(y, m)).Select(i => first.AddDays(i)).ToList();
+        var current = await CompanyPayrollClock.CurrentAsync(_db,ct);
+        var y = year ?? current.Year;
+        var m = month is >= 1 and <= 12 ? month.Value : current.Month;
+        var period = PayrollPeriod.ForMonth(y,m);
+        var first = period.Start;
+        var days = Enumerable.Range(0,period.CalendarDays).Select(i=>first.AddDays(i)).ToList();
         var last = days[^1];
 
         var empQuery = _db.Employees.AsNoTracking().AsQueryable();

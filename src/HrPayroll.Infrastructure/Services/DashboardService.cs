@@ -1,5 +1,7 @@
 using HrPayroll.Domain.Entities;
+using HrPayroll.Domain.Models;
 using HrPayroll.Domain.Enums;
+using HrPayroll.Domain.Services;
 using HrPayroll.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -31,6 +33,7 @@ public sealed class PayrollTrendPoint
 
 public sealed class DashboardData
 {
+    public string PeriodText => PayrollPeriod.ForMonth(Year,Month).Display;
     public DateTime StatDate { get; set; }
     public int Year { get; set; }
     public int Month { get; set; }
@@ -52,6 +55,10 @@ public sealed class DashboardData
     public int PendingOvertimeApprovals { get; set; }
     public decimal OvertimeHoursMonth { get; set; }
     public decimal ApprovedOvertimeHoursMonth { get; set; }
+    public decimal WorkedHoursToday { get; set; }
+    public decimal LateHoursToday { get; set; }
+    public decimal EarlyDepartureHoursToday { get; set; }
+    public decimal MissingScheduledHoursToday { get; set; }
     public decimal TotalDeductions { get; set; }
     public decimal TotalLoans { get; set; }
     public decimal TotalNetPayroll { get; set; }
@@ -73,11 +80,13 @@ public class DashboardService
 
     public DashboardService(AppDbContext db) => _db = db;
 
+    public Task<PayrollPeriod> CurrentPeriodAsync(CancellationToken ct = default) => CompanyPayrollClock.CurrentAsync(_db,ct);
+
     public async Task<DashboardData> GetAsync(int year, int month, DateTime? statDate = null, CancellationToken ct = default)
     {
-        var first = new DateTime(year, month, 1);
-        var last = first.AddMonths(1).AddDays(-1);
-        var date = (statDate ?? DateTime.Today).Date;
+        var period = PayrollPeriod.ForMonth(year,month);
+        var first = period.Start; var last = period.End;
+        var date = (statDate ?? await CompanyPayrollClock.TodayAsync(_db,ct)).Date;
 
         var data = new DashboardData { StatDate = date, Year = year, Month = month };
 
@@ -88,17 +97,12 @@ public class DashboardService
 
         var dayRows = await _db.DailyAttendances.AsNoTracking()
             .Where(d => d.WorkDate.Date == date)
-            .Select(d => new
-            {
-                d.EmployeeId, d.Status, d.PunchReviewStatus, d.DetectionSource,
-                d.ApprovedOvertimeMinutes, d.RawOvertimeMinutes, d.LateMinutes, d.CheckInTime, d.CheckOutTime
-            })
             .ToListAsync(ct);
 
         data.Present = dayRows.Count(d => d.CheckInTime != null);
         data.Absent = dayRows.Count(d => d.Status is AttendanceStatus.Absent or AttendanceStatus.UnexcusedAbsence);
         data.Late = dayRows.Count(d => d.LateMinutes > 0 || d.Status == AttendanceStatus.Late);
-        data.EarlyDeparture = dayRows.Count(d => d.Status == AttendanceStatus.EarlyDeparture);
+        data.EarlyDeparture = dayRows.Count(d => d.EarlyLeaveMinutes > 0);
         data.OnLeave = dayRows.Count(d => d.Status is AttendanceStatus.Leave or AttendanceStatus.PaidLeave or AttendanceStatus.UnpaidLeave);
         data.RestOrHoliday = dayRows.Count(d => d.Status is AttendanceStatus.RestDay or AttendanceStatus.Holiday);
         data.MissingEntry = dayRows.Count(d => d.Status == AttendanceStatus.MissingCheckIn || (d.CheckInTime == null && d.CheckOutTime != null));
@@ -107,15 +111,20 @@ public class DashboardService
         data.NeedsReview = dayRows.Count(d => d.PunchReviewStatus == ClassificationStatus.NeedsReview
                                               || d.Status == AttendanceStatus.NeedsReview);
         data.AmbiguousShifts = dayRows.Count(d => d.DetectionSource == ShiftDetectionSource.Ambiguous);
-        data.DaysWithoutData = data.ActiveEmployees > 0 && dayRows.Count == 0 ? data.ActiveEmployees : 0;
+        data.DaysWithoutData = employees.Where(e => e.IsActive).Select(e => e.Id)
+            .Except(dayRows.Select(d => d.EmployeeId)).Count();
+        data.WorkedHoursToday = HourDurationCalculator.ToHours(dayRows.Sum(d => d.WorkedMinutes));
+        data.LateHoursToday = HourDurationCalculator.ToHours(dayRows.Sum(d => d.ActualLateMinutes));
+        data.EarlyDepartureHoursToday = HourDurationCalculator.ToHours(dayRows.Sum(d => d.EarlyLeaveMinutes));
+        data.MissingScheduledHoursToday = HourDurationCalculator.ToHours(dayRows.Sum(d => d.MissingScheduledMinutes ?? 0));
 
         var monthRows = await _db.DailyAttendances.AsNoTracking()
             .Where(d => d.WorkDate >= first && d.WorkDate <= last)
             .Select(d => new { d.RawOvertimeMinutes, d.ApprovedOvertimeMinutes })
             .ToListAsync(ct);
 
-        data.OvertimeHoursMonth = Math.Round(monthRows.Sum(r => r.RawOvertimeMinutes) / 60m, 2);
-        data.ApprovedOvertimeHoursMonth = Math.Round(monthRows.Sum(r => r.ApprovedOvertimeMinutes) / 60m, 2);
+        data.OvertimeHoursMonth = HourDurationCalculator.ToHours(monthRows.Sum(r => r.RawOvertimeMinutes));
+        data.ApprovedOvertimeHoursMonth = HourDurationCalculator.ToHours(monthRows.Sum(r => r.ApprovedOvertimeMinutes));
 
         data.PendingOvertimeApprovals = await _db.DailyAttendances.AsNoTracking()
             .CountAsync(d => d.WorkDate >= first && d.WorkDate <= last
@@ -130,7 +139,7 @@ public class DashboardService
             .SumAsync(l => (decimal?)l.Amount, ct) ?? 0m;
 
         var latestRun = await _db.PayrollRuns.AsNoTracking()
-            .Where(r => r.Year == year && r.Month == month && r.Status != PayrollStatus.Cancelled)
+            .Where(r => r.Year == year && r.Month == month && r.PeriodStart == first && r.PeriodEnd == last && r.Status != PayrollStatus.Cancelled)
             .OrderByDescending(r => r.Version)
             .FirstOrDefaultAsync(ct);
 
@@ -167,13 +176,13 @@ public class DashboardService
             foreach (var id in ids)
             {
                 if (!rowsByEmployee.TryGetValue(id, out var row)) continue;
+                if (row.CheckInTime is not null) summary.Present++;
+                if (row.LateMinutes > 0) summary.Late++;
                 switch (row.Status)
                 {
                     case AttendanceStatus.Present:
                     case AttendanceStatus.Late:
                     case AttendanceStatus.EarlyDeparture:
-                        summary.Present++;
-                        if (row.Status == AttendanceStatus.Late) summary.Late++;
                         break;
                     case AttendanceStatus.RestDay:
                     case AttendanceStatus.Holiday:
@@ -198,14 +207,16 @@ public class DashboardService
         data.Departments = data.Departments.OrderByDescending(d => d.Total).ToList();
 
         // اتجاه صافي الرواتب لآخر 6 أشهر (من الكشوف غير الملغاة) للرسم البياني.
-        var trendFrom = first.AddMonths(-5);
+        var trendFrom = period.End.AddMonths(-5);
         var allRuns = await _db.PayrollRuns.AsNoTracking()
             .Where(r => r.Status != PayrollStatus.Cancelled)
-            .Select(r => new { r.Id, r.Year, r.Month, r.TotalNet, r.TotalGross })
+            .Select(r => new { r.Id, r.Year, r.Month, r.Version, r.TotalNet, r.TotalGross })
             .ToListAsync(ct);
         var runs = allRuns
             .Where(r => (r.Year * 12 + r.Month) >= (trendFrom.Year * 12 + trendFrom.Month)
-                     && (r.Year * 12 + r.Month) <= (first.Year * 12 + first.Month))
+                     && (r.Year * 12 + r.Month) <= (period.Year * 12 + period.Month))
+            .GroupBy(r => (r.Year, r.Month))
+            .Select(g => g.OrderByDescending(r => r.Version).ThenByDescending(r => r.Id).First())
             .OrderBy(r => r.Year).ThenBy(r => r.Month)
             .ToList();
         var runIds = runs.Select(r => r.Id).ToList();

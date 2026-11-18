@@ -8,6 +8,54 @@ namespace HrPayroll.Tests;
 /// <summary>المتطلبات 13-15: تصنيف البصمات، البصمات الناقصة، والورديات الليلية.</summary>
 public class ClassificationTests
 {
+    [Fact]
+    public void Single_Explicit_CheckOut_Is_Not_Reinterpreted_As_Morning_CheckIn()
+    {
+        var result = PunchClassifier.Classify(new[] { Punch(1, TestDb.Monday.AddHours(8), "O") },
+            TestDb.FirstShift(), TestDb.Monday, Policy());
+        Assert.Null(result.CheckIn);
+        Assert.Equal(TestDb.Monday.AddHours(8), result.CheckOut);
+        Assert.Equal(AttendanceStatus.MissingCheckIn, result.SuggestedStatus);
+        Assert.Equal(ClassificationStatus.NeedsReview, result.Status);
+        Assert.Equal(0, result.CalculatedOvertimeMinutes);
+    }
+
+    [Fact]
+    public void Repeated_Explicit_CheckIns_Do_Not_Invent_An_Exit()
+    {
+        var result = PunchClassifier.Classify(new[]
+        {
+            Punch(1, TestDb.Monday.AddHours(7), "I"), Punch(2, TestDb.Monday.AddHours(15), "I")
+        }, TestDb.FirstShift(), TestDb.Monday, Policy());
+        Assert.NotNull(result.CheckIn);
+        Assert.Null(result.CheckOut);
+        Assert.Equal(AttendanceStatus.MissingCheckOut, result.SuggestedStatus);
+        Assert.All(result.Events, e => Assert.Equal(AttendanceEventType.Entry, e.EventType));
+    }
+
+    [Fact]
+    public void Opposite_Directions_At_The_Same_Time_Are_Preserved_For_Review()
+    {
+        var result = PunchClassifier.Classify(new[]
+        {
+            Punch(1, TestDb.Monday.AddHours(8), "I"), Punch(2, TestDb.Monday.AddHours(8), "O")
+        }, TestDb.FirstShift(), TestDb.Monday, Policy());
+        Assert.Equal(2, result.Events.Count);
+        Assert.Equal(ClassificationStatus.NeedsReview, result.Status);
+    }
+
+    [Fact]
+    public void Neutral_Punches_In_Explicit_File_Are_Preserved_As_Review_Events()
+    {
+        var result = PunchClassifier.Classify(new[]
+        {
+            Punch(1, TestDb.Monday.AddHours(7), "I"), Punch(2, TestDb.Monday.AddHours(10), "FP"),
+            Punch(3, TestDb.Monday.AddHours(15), "O")
+        }, TestDb.FirstShift(), TestDb.Monday, Policy());
+        Assert.Equal(3, result.Events.Count);
+        Assert.Contains(result.Events, e => e.EventType == AttendanceEventType.Unknown);
+        Assert.Equal(ClassificationStatus.NeedsReview, result.Status);
+    }
     private static AttendancePolicy Policy() => new()
     {
         WorkDaysPerMonth = 30,

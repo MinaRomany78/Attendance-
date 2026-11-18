@@ -37,7 +37,8 @@ public class ImportFileZoneViewModel
 
     public HrPayroll.Infrastructure.Import.ImportAnalysisResult? Analysis { get; set; }
 
-    public string FormatName => Analysis is null ? "-" : FormatDisplay(Analysis.Format);
+    public string FormatName => Analysis is null ? "-" : Analysis.Mapping?.IsZkExport == true
+        ? "ZKTeco — ملف نصي" : FormatDisplay(Analysis.Format);
 
     /// <summary>الملف صالح وقابل للاستيراد.</summary>
     public bool Ok => Provided && Error is null && Analysis is { HasMapping: true };
@@ -50,7 +51,7 @@ public class ImportFileZoneViewModel
     public int UnknownEmployees => Analysis?.UnknownEmployeeCount ?? 0;
 
     /// <summary>سجلات تحتاج إلى مراجعة بشرية: كود غير معروف أو تاريخ/وقت غير صالح.</summary>
-    public int NeedsReview => Invalid + UnknownEmployees;
+    public int NeedsReview => Analysis?.ReviewCount ?? 0;
 
     private (DateTime? From, DateTime? To) Period
     {
@@ -87,7 +88,7 @@ public class ImportFileZoneViewModel
             if (Error is not null) return "فشل التحقق من الملف";
             if (Analysis is null) return "لم يتم تحليل الملف";
             if (!Analysis.HasMapping) return "ملف غير صالح — تعذّر التعرف على الأعمدة المطلوبة";
-            if (Accepted == 0 && NeedsReview == 0 && Duplicates > 0) return "لا توجد سجلات جديدة (مستوردة مسبقًا)";
+            if (Accepted == 0 && NeedsReview + Invalid + UnknownEmployees == 0 && Duplicates > 0) return "لا توجد سجلات جديدة (مستوردة مسبقًا)";
             return "جاهز للرفع والاستيراد";
         }
     }
@@ -125,6 +126,7 @@ public class ImportFilesViewModel
 
     public ImportFileZoneViewModel? Entry => Zones.FirstOrDefault(z => z.Key == "entry");
     public ImportFileZoneViewModel? Exit => Zones.FirstOrDefault(z => z.Key == "exit");
+    public ImportFileZoneViewModel? Combined => Zones.FirstOrDefault(z => z.Key == "combined");
 
     /// <summary>عدد الملفات الصالحة القابلة للتأكيد.</summary>
     public int ValidFiles => Zones.Count(z => z.Ok);
@@ -132,6 +134,11 @@ public class ImportFilesViewModel
     public int TotalAccepted => Zones.Where(z => z.Ok).Sum(z => z.Accepted);
     public int TotalNeedsReview => Zones.Where(z => z.Ok).Sum(z => z.NeedsReview);
     public int TotalDuplicates => Zones.Where(z => z.Ok).Sum(z => z.Duplicates);
+    public int TotalRecords => Zones.Where(z => z.Ok).Sum(z => z.Total);
+    public int TotalCheckIns => Zones.Where(z => z.Ok).Sum(z => z.Analysis?.CheckInCount ?? 0);
+    public int TotalCheckOuts => Zones.Where(z => z.Ok).Sum(z => z.Analysis?.CheckOutCount ?? 0);
+    public int TotalInvalid => Zones.Where(z => z.Ok).Sum(z => z.Invalid);
+    public int TotalUnknownEmployees => Zones.Where(z => z.Ok).Sum(z => z.UnknownEmployees);
 
     /// <summary>عدد الملفات التي تحمل سجلات جديدة فعلًا.</summary>
     public int FilesWithNewRecords => Zones.Count(z => z.HasNewRecords);

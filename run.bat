@@ -5,7 +5,8 @@ rem
 rem  Works both from the repository root and from the published folder, so the
 rem  same file is reused as publish\run.bat after publishing.
 rem
-rem  No Visual Studio, no .NET SDK and no locally installed SQL Server needed.
+rem  No Visual Studio or .NET SDK is needed for the published application.
+rem  A reachable SQL Server with the current migrations is required.
 rem
 rem  The database password is NOT stored in this file. It is read from:
 rem    - appsettings.Production.json next to the executable, or
@@ -38,9 +39,7 @@ echo  Environment  : %ASPNETCORE_ENVIRONMENT%
 echo  Listening on : %ASPNETCORE_URLS%
 if defined ConnectionStrings__DefaultConnection goto :db_env
 if exist "%APPDIR%appsettings.Production.json" goto :db_file
-echo  Database     : WARNING - appsettings.Production.json was not found and
-echo                 ConnectionStrings__DefaultConnection is not set.
-echo                 The app will start but cannot reach SQL Server.
+echo  Database     : connection string from appsettings.json
 goto :start
 :db_env
 echo  Database     : connection string from the environment (password hidden)
@@ -50,6 +49,8 @@ echo  Database     : connection string from appsettings.Production.json
 goto :start
 
 :start
+rem Resolve configuration and static assets from the published application.
+cd /d "%APPDIR%"
 echo ------------------------------------------------------------
 echo  Press CTRL+C in this window to stop the application.
 echo ------------------------------------------------------------

@@ -1,3 +1,4 @@
+using HrPayroll.Domain.Models;
 using HrPayroll.Domain.Entities;
 using HrPayroll.Domain.Enums;
 using HrPayroll.Infrastructure.Persistence;
@@ -63,6 +64,8 @@ public class LeavesController : Controller
 
         if (!await _db.Employees.AnyAsync(e => e.Id == vm.EmployeeId, ct))
             ModelState.AddModelError(nameof(vm.EmployeeId), "الموظف غير موجود");
+        try { await FinancialPeriodGuard.EnsureEditableAsync(_db, vm.StartDate, vm.EndDate, ct); }
+        catch (InvalidOperationException ex) { ModelState.AddModelError(string.Empty, ex.Message); }
 
         var overlaps = await _leaves.FindOverlapsAsync(vm.EmployeeId, vm.StartDate, vm.EndDate, null, ct);
         if (overlaps.Count > 0)
@@ -88,7 +91,14 @@ public class LeavesController : Controller
         }, this.CurrentUserName(), allowOverlap: false, ct);
 
         if (vm.ApproveImmediately)
-            await _leaves.ApproveAsync(leave.Id, this.CurrentUserName(), ct);
+        {
+            try { await _leaves.ApproveAsync(leave.Id, this.CurrentUserName(), ct); }
+            catch (InvalidOperationException ex)
+            {
+                TempData["Error"] = $"تم تسجيل الطلب قيد المراجعة ولم يُعتمد: {ex.Message}";
+                return RedirectToAction(nameof(Index));
+            }
+        }
 
         TempData["Success"] = $"تم تسجيل الإجازة ({leave.WorkingDays:0.##} يوم عمل)";
         return RedirectToAction(nameof(Index));
@@ -111,7 +121,7 @@ public class LeavesController : Controller
         if (id != vm.Id) return BadRequest();
         var leave = await _db.LeaveRequests.FirstOrDefaultAsync(l => l.Id == id, ct);
         if (leave is null) return NotFound();
-        if (leave.Status == ApprovalStatus.Approved)
+        if (leave.Status == ApprovalStatus.Approved || leave.PayrollItemId.HasValue)
         {
             TempData["Error"] = "لا يمكن تعديل إجازة معتمدة. ارفضها أولًا ثم أعد تسجيلها.";
             return RedirectToAction(nameof(Index));
@@ -119,6 +129,13 @@ public class LeavesController : Controller
 
         if (vm.EndDate.Date < vm.StartDate.Date)
             ModelState.AddModelError(nameof(vm.EndDate), "تاريخ النهاية قبل تاريخ البداية");
+        if (!await _db.Employees.AnyAsync(e => e.Id == vm.EmployeeId, ct)) ModelState.AddModelError(nameof(vm.EmployeeId), "الموظف غير موجود");
+        try
+        {
+            await FinancialPeriodGuard.EnsureEditableAsync(_db, leave.StartDate, leave.EndDate, ct);
+            await FinancialPeriodGuard.EnsureEditableAsync(_db, vm.StartDate, vm.EndDate, ct);
+        }
+        catch (InvalidOperationException ex) { ModelState.AddModelError(string.Empty, ex.Message); }
         if (!ModelState.IsValid)
         {
             vm.Employees = await _db.Employees.AsNoTracking().Where(e => e.IsActive).OrderBy(e => e.FullName).ToListAsync(ct);
@@ -156,8 +173,8 @@ public class LeavesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Approve(int id, CancellationToken ct)
     {
-        await _leaves.ApproveAsync(id, this.CurrentUserName(), ct);
-        TempData["Success"] = "تم اعتماد الإجازة";
+        try { await _leaves.ApproveAsync(id, this.CurrentUserName(), ct); TempData["Success"] = "تم اعتماد الإجازة"; }
+        catch (InvalidOperationException ex) { TempData["Error"] = ex.Message; }
         return RedirectToAction(nameof(Index));
     }
 
@@ -165,8 +182,8 @@ public class LeavesController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Reject(int id, CancellationToken ct)
     {
-        await _leaves.RejectAsync(id, this.CurrentUserName(), ct);
-        TempData["Success"] = "تم رفض الإجازة";
+        try { await _leaves.RejectAsync(id, this.CurrentUserName(), ct); TempData["Success"] = "تم رفض الإجازة"; }
+        catch (InvalidOperationException ex) { TempData["Error"] = ex.Message; }
         return RedirectToAction(nameof(Index));
     }
 
@@ -175,11 +192,12 @@ public class LeavesController : Controller
     [HttpGet]
     public async Task<IActionResult> ConvertAbsence(int? employeeId, DateTime? from, DateTime? to, CancellationToken ct)
     {
+        var today = await CompanyPayrollClock.TodayAsync(_db,ct);
         var vm = new ConvertAbsenceViewModel
         {
             EmployeeId = employeeId ?? 0,
-            From = from?.Date ?? new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
-            To = to?.Date ?? DateTime.Today,
+            From = from?.Date ?? PayrollPeriod.FromDate(today).Start,
+            To = to?.Date ?? today,
             Employees = await _db.Employees.AsNoTracking().OrderBy(e => e.FullName).ToListAsync(ct)
         };
 
@@ -208,7 +226,7 @@ public class LeavesController : Controller
         {
             var leave = await _leaves.ConvertAbsenceAsync(
                 vm.EmployeeId, vm.SelectedDates, vm.LeaveType, vm.Reason, this.CurrentUserName(), ct);
-            TempData["Success"] = $"تم تحويل {vm.SelectedDates.Count} يوم غياب إلى إجازة معتمدة ({vm.LeaveType}).";
+            TempData["Success"] = $"تم تحويل أيام الغياب الصالحة المحددة إلى إجازة معتمدة ({vm.LeaveType}).";
             return RedirectToAction(nameof(Index), new { employeeId = leave.EmployeeId });
         }
         catch (InvalidOperationException ex)

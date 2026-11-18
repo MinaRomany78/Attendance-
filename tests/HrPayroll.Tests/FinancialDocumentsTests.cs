@@ -76,7 +76,7 @@ public class FinancialDocumentsTests
     }
 
     [Fact]
-    public async Task Advance_DuplicatePeriod_IsRejected()
+    public async Task Advance_Multiple_In_Same_Period_Are_Allowed()
     {
         using var db = new TestDb();
         using var ctx = db.CreateContext();
@@ -89,12 +89,12 @@ public class FinancialDocumentsTests
 
         var svc = Advances(ctx);
         await svc.CalculateAsync(1, 2024, 10, new DateTime(2024, 10, 15));
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => svc.CalculateAsync(1, 2024, 10, new DateTime(2024, 10, 15)));
+        await svc.CalculateAsync(1, 2024, 10, new DateTime(2024, 10, 15));
+        Assert.Equal(2, await ctx.SalaryAdvances.CountAsync());
     }
 
     [Fact]
-    public async Task Advance_IncludedExpenses_ReduceProposal_AndNotDeductedTwice()
+    public async Task Advance_IncludedExpenses_Are_Not_Additional_Payroll_Deductions()
     {
         using var db = new TestDb();
         using var ctx = db.CreateContext();
@@ -114,8 +114,9 @@ public class FinancialDocumentsTests
         var svc = Advances(ctx);
         var advance = await svc.CalculateAsync(1, 2024, 10, new DateTime(2024, 10, 15));
 
-        Assert.Equal(500m, advance.IncludedExpenses);
-        // المقترح = min(الأساسي، الصافي) − المشمول: لا يُدفع المشمول مرتين.
+        // 13 recorded workdays plus the three configured Friday rest days elapsed in this 26–25 cycle.
+        Assert.Equal(4800m, advance.ProposedAmount);
+        // المصروف المشمول ضمن سلفة لا يصبح خصماً مستقلاً مرة أخرى.
         Assert.True(advance.ProposedAmount <= 9000m - 500m + 0.01m);
     }
 
@@ -174,7 +175,7 @@ public class FinancialDocumentsTests
         var (db, ctx) = await SeedAsync();
         using (db)
         {
-            AddWorkDays(ctx, 1, new DateTime(2024, 10, 1), new DateTime(2024, 10, 31));
+            AddWorkDays(ctx, 1, new DateTime(2024, 9, 26), new DateTime(2024, 10, 25));
             var loan = new Loan
             {
                 EmployeeId = 1, Amount = 12000m, LoanDate = new DateTime(2024, 10, 1),
@@ -275,7 +276,7 @@ public class FinancialDocumentsTests
         var (db, ctx) = await SeedAsync();
         using (db)
         {
-            AddWorkDays(ctx, 1, new DateTime(2024, 10, 1), new DateTime(2024, 10, 31));
+            AddWorkDays(ctx, 1, new DateTime(2024, 9, 26), new DateTime(2024, 10, 25));
             await ctx.SaveChangesAsync();
             ctx.GetType(); // إبقاء السياق
 

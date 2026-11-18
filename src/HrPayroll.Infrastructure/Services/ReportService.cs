@@ -1,4 +1,6 @@
 using HrPayroll.Domain.Enums;
+using HrPayroll.Domain.Models;
+using HrPayroll.Domain.Services;
 using HrPayroll.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -39,7 +41,9 @@ public sealed class DailyAttendanceReportRow
     public DateTime? CheckOut { get; set; }
     public int WorkedMinutes { get; set; }
     public int LateMinutes { get; set; }
+    public int ActualLateMinutes { get; set; }
     public int EarlyLeaveMinutes { get; set; }
+    public int? MissingScheduledMinutes { get; set; }
     public int RawOvertimeMinutes { get; set; }
     public int ApprovedOvertimeMinutes { get; set; }
     public AttendanceStatus Status { get; set; }
@@ -51,9 +55,20 @@ public sealed class DailyAttendanceReportRow
     public string? LeaveType { get; set; }
     public string? Notes { get; set; }
     public string? AdminNotes { get; set; }
-    public decimal WorkedHours => Math.Round(WorkedMinutes / 60m, 2);
-    public decimal RawOvertimeHours => Math.Round(RawOvertimeMinutes / 60m, 2);
-    public decimal ApprovedOvertimeHours => Math.Round(ApprovedOvertimeMinutes / 60m, 2);
+    public HourRoundingPolicy HourRounding { get; set; } = new();
+    public decimal WorkedHours => HourDurationCalculator.ToHours(WorkedMinutes);
+    public decimal ActualWorkedHours => WorkedHours;
+    public decimal LateHours => HourDurationCalculator.ToHours(LateMinutes);
+    public decimal ActualLateHours => HourDurationCalculator.ToHours(ActualLateMinutes);
+    public decimal EarlyLeaveHours => HourDurationCalculator.ToHours(EarlyLeaveMinutes);
+    public decimal? ActualMissingHours => MissingScheduledMinutes.HasValue ? HourDurationCalculator.ToHours(MissingScheduledMinutes.Value) : null;
+    public decimal RoundedLateHours => HourDurationCalculator.RoundMinutes(ActualLateMinutes, HourRounding);
+    public decimal RoundedEarlyLeaveHours => HourDurationCalculator.RoundMinutes(EarlyLeaveMinutes, HourRounding);
+    public decimal? RoundedMissingHours => MissingScheduledMinutes.HasValue ? HourDurationCalculator.RoundMinutes(MissingScheduledMinutes.Value, HourRounding) : null;
+    public decimal RawOvertimeHours => HourDurationCalculator.ToHours(RawOvertimeMinutes);
+    public decimal ApprovedOvertimeHours => HourDurationCalculator.ToHours(ApprovedOvertimeMinutes);
+    public bool IsLate => LateMinutes > 0;
+    public bool HasEarlyDeparture => EarlyLeaveMinutes > 0;
     public bool NeedsReview => PunchReviewStatus == ClassificationStatus.NeedsReview
                                || Status is AttendanceStatus.NeedsReview or AttendanceStatus.MissingCheckIn
                                    or AttendanceStatus.MissingCheckOut;
@@ -87,7 +102,9 @@ public sealed class OvertimeReportRow
     public DateTime? CheckOut { get; set; }
     public int RawMinutes { get; set; }
     public int ApprovedMinutes { get; set; }
-    public decimal DecimalHours => Math.Round(ApprovedMinutes / 60m, 2);
+    public decimal RawHours => HourDurationCalculator.ToHours(RawMinutes);
+    public decimal ApprovedHours => HourDurationCalculator.ToHours(ApprovedMinutes);
+    public decimal DecimalHours => ApprovedHours;
     public bool IsApproved => ApprovedMinutes > 0;
 }
 
@@ -101,7 +118,13 @@ public sealed class AbsenceReportRow
     public DateTime WorkDate { get; set; }
     public AttendanceStatus Status { get; set; }
     public int LateMinutes { get; set; }
+    public int ActualLateMinutes { get; set; }
     public int EarlyLeaveMinutes { get; set; }
+    public int? MissingScheduledMinutes { get; set; }
+    public decimal LateHours => HourDurationCalculator.ToHours(LateMinutes);
+    public decimal ActualLateHours => HourDurationCalculator.ToHours(ActualLateMinutes);
+    public decimal EarlyLeaveHours => HourDurationCalculator.ToHours(EarlyLeaveMinutes);
+    public decimal? ActualMissingHours => MissingScheduledMinutes.HasValue ? HourDurationCalculator.ToHours(MissingScheduledMinutes.Value) : null;
     public bool HasIncompletePunches { get; set; }
     public string? Notes { get; set; }
 }
@@ -118,6 +141,10 @@ public sealed class PayrollReportRow
     public decimal BasicSalary { get; set; }
     public decimal DailyRate { get; set; }
     public decimal HourlyRate { get; set; }
+    public int DailyRateBasisDays { get; set; }
+    public int WorkHoursPerDay { get; set; }
+    public decimal EffectiveWorkHoursPerDay => HourlyRate > 0m
+        ? decimal.Round(DailyRate / HourlyRate, 4, MidpointRounding.AwayFromZero) : WorkHoursPerDay;
 
     /// <summary>سعر الدقيقة (لحساب خصم التأخير) — يُستخدم في المعاينة الفورية على الشاشة.</summary>
     public decimal MinuteRate { get; set; }
@@ -148,6 +175,13 @@ public sealed class PayrollReportRow
     public decimal AnnualLeaveBalanceApplied { get; set; }
 
     public int LateMinutes { get; set; }
+    public decimal ActualLateHours { get; set; }
+    public decimal? ActualEarlyDepartureHours { get; set; }
+    public decimal? ActualMissingHours { get; set; }
+    public decimal? RoundedDurationHours { get; set; }
+    public decimal ChargeableHours { get; set; }
+    public string AttendanceDeductionBasisText { get; set; } = string.Empty;
+    public string DurationPolicyDescription { get; set; } = string.Empty;
     public decimal RawOvertimeHours { get; set; }
     public decimal ApprovedOvertimeHours { get; set; }
     public decimal PaidOvertimeHours { get; set; }
@@ -158,9 +192,27 @@ public sealed class PayrollReportRow
     public decimal AdditionalDaysAmount { get; set; }
     public decimal? ExtraDaysRate { get; set; }
     public decimal LateDeduction { get; set; }
+    public int? EarlyLeaveMinutes { get; set; }
+    public decimal? EarlyLeaveDeduction { get; set; }
+    public decimal? ShortageDeduction { get; set; }
+    public DateTime? EarningsAsOf { get; set; }
+    public decimal? EarnedBasicSalary { get; set; }
+    public decimal? EarnedGrossSalary { get; set; }
+    public decimal? EarnedDeductions { get; set; }
+    public decimal? EarnedNetSalary { get; set; }
+    public int? AttendanceMissingDays { get; set; }
+    public bool IsProvisional => Status is not (PayrollStatus.Approved or PayrollStatus.Locked);
     public decimal AbsenceDeduction { get; set; }
     public decimal UnpaidLeaveDeduction { get; set; }
+    public string? FinancialReviewReason { get; set; }
+    public decimal UncoveredDeductions { get; set; }
+    public decimal? ContractBasicSalary { get; set; }
+    public decimal? PayableBasicDays { get; set; }
     public decimal LoansTotal { get; set; }
+    public decimal? SalaryAdvancesPaid { get; set; }
+    public decimal? LoanInstallments { get; set; }
+    public decimal? LegacyLoanDeductions { get; set; }
+    public decimal? EmployeeExpenseRecoveries { get; set; }
     public decimal DeductionsTotal { get; set; }
     public decimal OtherDeductions { get; set; }
     public decimal GrossEarnings { get; set; }
@@ -188,6 +240,7 @@ public sealed class PayslipData
     public int PayrollRunId { get; set; }
     public int Year { get; set; }
     public int Month { get; set; }
+    public string PeriodText { get; set; } = string.Empty;
     public PayrollStatus RunStatus { get; set; }
     public string CompanyName { get; set; } = string.Empty;
     public string Currency { get; set; } = string.Empty;
@@ -208,7 +261,8 @@ public sealed class EmployeeAttendanceSummaryRow
     public int AbsentRecords { get; set; }
     public int LateMinutes { get; set; }
     public int ApprovedOvertimeMinutes { get; set; }
-    public decimal ApprovedOvertimeHours => Math.Round(ApprovedOvertimeMinutes / 60m, 2);
+    public decimal LateHours => HourDurationCalculator.ToHours(LateMinutes);
+    public decimal ApprovedOvertimeHours => HourDurationCalculator.ToHours(ApprovedOvertimeMinutes);
     public bool NeedsReview => AbsentRecords > 0;
 }
 
@@ -312,6 +366,9 @@ public class ReportService
         if (filter.EmployeeId.HasValue) q = q.Where(d => d.EmployeeId == filter.EmployeeId.Value);
         if (filter.ShiftId.HasValue) q = q.Where(d => d.ShiftId == filter.ShiftId.Value);
         if (filter.Status.HasValue) q = q.Where(d => d.Status == filter.Status.Value);
+        if (filter.ImportBatchId.HasValue)
+            q = q.Where(d => _db.AttendanceEvents.Any(e => e.EmployeeId == d.EmployeeId && e.WorkDate == d.WorkDate
+                && e.RawPunch != null && e.RawPunch.ImportBatchId == filter.ImportBatchId.Value));
         if (!string.IsNullOrWhiteSpace(filter.Department))
             q = q.Where(d => d.Employee!.Department == filter.Department);
         if (!string.IsNullOrWhiteSpace(filter.Search))
@@ -322,9 +379,11 @@ public class ReportService
                              || (d.Employee!.DeviceEmployeeCode != null && d.Employee!.DeviceEmployeeCode.Contains(s)));
         }
 
-        var rows = await q
+        var source = await q
             .OrderBy(d => d.WorkDate).ThenBy(d => d.Employee!.EmployeeCode)
-            .Select(d => new DailyAttendanceReportRow
+            .ToListAsync(ct);
+        var policy = await _settings.GetPolicyAsync(ct);
+        var rows = source.Select(d => new DailyAttendanceReportRow
             {
                 DailyAttendanceId = d.Id,
                 EmployeeId = d.EmployeeId,
@@ -340,7 +399,11 @@ public class ReportService
                 CheckIn = d.CheckInTime,
                 CheckOut = d.CheckOutTime,
                 LateMinutes = d.LateMinutes,
+                ActualLateMinutes = d.ActualLateMinutes,
                 EarlyLeaveMinutes = d.EarlyLeaveMinutes,
+                MissingScheduledMinutes = d.MissingScheduledMinutes,
+                WorkedMinutes = d.WorkedMinutes,
+                HourRounding = policy.HourRounding,
                 RawOvertimeMinutes = d.RawOvertimeMinutes,
                 ApprovedOvertimeMinutes = d.ApprovedOvertimeMinutes,
                 Status = d.Status,
@@ -352,13 +415,7 @@ public class ReportService
                 LeaveType = d.LeaveRequest != null ? d.LeaveRequest.LeaveType.ToString() : null,
                 Notes = d.Notes,
                 AdminNotes = d.AdminNotes
-            })
-            .ToListAsync(ct);
-
-        foreach (var r in rows)
-            r.WorkedMinutes = r.CheckIn.HasValue && r.CheckOut.HasValue
-                ? Math.Max(0, (int)Math.Round((r.CheckOut.Value - r.CheckIn.Value).TotalMinutes))
-                : 0;
+            }).ToList();
 
         return rows;
     }
@@ -374,12 +431,12 @@ public class ReportService
             {
                 Department = g.Key,
                 Total = g.Select(x => x.EmployeeId).Distinct().Count(),
-                Present = g.Count(x => x.Status is AttendanceStatus.Present or AttendanceStatus.Late or AttendanceStatus.EarlyDeparture),
-                Absent = g.Count(x => x.Status is AttendanceStatus.Absent or AttendanceStatus.UnexcusedAbsence),
-                Late = g.Count(x => x.LateMinutes > 0),
-                Incomplete = g.Count(x => x.HasIncompletePunches),
-                OnLeave = g.Count(x => x.Status is AttendanceStatus.Leave or AttendanceStatus.PaidLeave or AttendanceStatus.UnpaidLeave),
-                RestOrHoliday = g.Count(x => x.Status is AttendanceStatus.RestDay or AttendanceStatus.Holiday),
+                Present = g.Where(x => x.CheckIn != null).Select(x => x.EmployeeId).Distinct().Count(),
+                Absent = g.Where(x => x.Status is AttendanceStatus.Absent or AttendanceStatus.UnexcusedAbsence).Select(x => x.EmployeeId).Distinct().Count(),
+                Late = g.Where(x => x.LateMinutes > 0).Select(x => x.EmployeeId).Distinct().Count(),
+                Incomplete = g.Where(x => x.HasIncompletePunches).Select(x => x.EmployeeId).Distinct().Count(),
+                OnLeave = g.Where(x => x.Status is AttendanceStatus.Leave or AttendanceStatus.PaidLeave or AttendanceStatus.UnpaidLeave).Select(x => x.EmployeeId).Distinct().Count(),
+                RestOrHoliday = g.Where(x => x.Status is AttendanceStatus.RestDay or AttendanceStatus.Holiday).Select(x => x.EmployeeId).Distinct().Count(),
                 Rows = g.OrderBy(x => x.EmployeeCode).ToList()
             })
             .OrderByDescending(r => r.Total)
@@ -390,32 +447,20 @@ public class ReportService
     public async Task<List<OvertimeReportRow>> GetOvertimeAsync(
         AttendanceReportFilter filter, bool onlyWithOvertime = true, CancellationToken ct = default)
     {
-        var from = filter.From.Date;
-        var to = filter.To.Date;
-        if (to < from) (from, to) = (to, from);
-
-        var rows = await _db.DailyAttendances.AsNoTracking()
-            .Include(d => d.Employee).Include(d => d.Shift)
-            .Where(d => d.WorkDate >= from && d.WorkDate <= to)
-            .Where(d => d.RawOvertimeMinutes > 0 || d.ApprovedOvertimeMinutes > 0)
-            .Where(d => !filter.EmployeeId.HasValue || d.EmployeeId == filter.EmployeeId.Value)
-            .Where(d => string.IsNullOrEmpty(filter.Department) || d.Employee!.Department == filter.Department)
-            .Where(d => !filter.ShiftId.HasValue || d.ShiftId == filter.ShiftId.Value)
-            .OrderBy(d => d.WorkDate).ThenBy(d => d.Employee!.EmployeeCode)
-            .Select(d => new OvertimeReportRow
+        var source = await GetDailyAttendanceAsync(filter, ct);
+        var rows = source.Select(d => new OvertimeReportRow
             {
                 EmployeeId = d.EmployeeId,
-                EmployeeCode = d.Employee!.EmployeeCode,
-                EmployeeName = d.Employee!.FullName,
-                Department = d.Employee!.Department,
+                EmployeeCode = d.EmployeeCode,
+                EmployeeName = d.EmployeeName,
+                Department = d.Department,
                 WorkDate = d.WorkDate,
-                ShiftName = d.Shift != null ? d.Shift.ShiftName : null,
+                ShiftName = d.ShiftName,
                 ShiftEnd = d.ShiftEnd,
-                CheckOut = d.CheckOutTime,
+                CheckOut = d.CheckOut,
                 RawMinutes = d.RawOvertimeMinutes,
                 ApprovedMinutes = d.ApprovedOvertimeMinutes
-            })
-            .ToListAsync(ct);
+            }).ToList();
 
         if (onlyWithOvertime) rows = rows.Where(r => r.RawMinutes > 0 || r.ApprovedMinutes > 0).ToList();
         return rows;
@@ -440,7 +485,9 @@ public class ReportService
                 WorkDate = r.WorkDate,
                 Status = r.Status,
                 LateMinutes = r.LateMinutes,
+                ActualLateMinutes = r.ActualLateMinutes,
                 EarlyLeaveMinutes = r.EarlyLeaveMinutes,
+                MissingScheduledMinutes = r.MissingScheduledMinutes,
                 HasIncompletePunches = r.HasIncompletePunches,
                 Notes = r.Notes
             })
@@ -449,6 +496,12 @@ public class ReportService
     }
 
     /// <summary>صفوف تقرير الرواتب من كشف محسوب فعليًا.</summary>
+    public async Task<PayrollPeriod> GetPayrollPeriodAsync(int payrollRunId,CancellationToken ct=default)
+    {
+        var run = await _db.PayrollRuns.AsNoTracking().SingleAsync(r=>r.Id==payrollRunId,ct);
+        return PayrollPeriod.ForRun(run);
+    }
+
     public async Task<List<PayrollReportRow>> GetPayrollRowsAsync(
         int payrollRunId, string? department = null, int? employeeId = null, PayrollStatus? status = null,
         CancellationToken ct = default)
@@ -458,7 +511,8 @@ public class ReportService
         if (employeeId.HasValue) q = q.Where(i => i.EmployeeId == employeeId.Value);
         if (status.HasValue) q = q.Where(i => i.Status == status.Value);
 
-        var rows = await q.OrderBy(i => i.EmployeeCode).Select(i => new PayrollReportRow
+        var source = await q.OrderBy(i => i.EmployeeCode).ToListAsync(ct);
+        var rows = source.Select(i => new PayrollReportRow
         {
             PayrollItemId = i.Id,
             EmployeeId = i.EmployeeId,
@@ -469,6 +523,8 @@ public class ReportService
             BasicSalary = i.BasicSalary,
             DailyRate = i.DailyRate,
             HourlyRate = i.HourlyRate,
+            DailyRateBasisDays = i.DailyRateBasisDays,
+            WorkHoursPerDay = i.WorkHoursPerDay,
             MinuteRate = i.MinuteRate,
             OvertimeMultiplier = i.OvertimeMultiplier,
             AttendanceDays = i.AttendanceDays,
@@ -486,6 +542,13 @@ public class ReportService
                 ? i.Employee.AnnualLeaveEntitlement + i.Employee.AnnualLeaveCarriedOver
                 : 0m,
             LateMinutes = i.LateMinutes,
+            ActualLateHours = i.ActualLateHours,
+            ActualEarlyDepartureHours = i.ActualEarlyDepartureHours,
+            ActualMissingHours = i.ActualMissingHours,
+            RoundedDurationHours = i.RoundedDurationHours,
+            ChargeableHours = i.ChargeableHours,
+            AttendanceDeductionBasisText = i.AttendanceDeductionBasisText,
+            DurationPolicyDescription = i.DurationPolicyDescription,
             RawOvertimeHours = i.RawOvertimeHours,
             ApprovedOvertimeHours = i.ApprovedOvertimeHours,
             PaidOvertimeHours = i.PaidOvertimeHours,
@@ -496,9 +559,13 @@ public class ReportService
             AdditionalDaysAmount = i.AdditionalDaysAmount,
             ExtraDaysRate = i.AdditionalDaysRate,
             LateDeduction = i.LateDeduction,
+            EarlyLeaveMinutes = i.EarlyLeaveMinutes, EarlyLeaveDeduction = i.EarlyLeaveDeduction, ShortageDeduction = i.ShortageDeduction,
+            EarningsAsOf = i.EarningsAsOf, EarnedBasicSalary = i.EarnedBasicSalary, EarnedGrossSalary = i.EarnedGrossSalary,
+            EarnedDeductions = i.EarnedDeductions, EarnedNetSalary = i.EarnedNetSalary, AttendanceMissingDays = i.AttendanceMissingDays,
             AbsenceDeduction = i.AbsenceDeduction,
             UnpaidLeaveDeduction = i.UnpaidLeaveDeduction,
-            LoansTotal = i.LoansTotal,
+            FinancialReviewReason = i.FinancialReviewReason, UncoveredDeductions = i.UncoveredDeductions, ContractBasicSalary = i.ContractBasicSalary, PayableBasicDays = i.PayableBasicDays,
+            LoansTotal = i.LoansTotal, SalaryAdvancesPaid = i.SalaryAdvancesPaid, LoanInstallments = i.LoanInstallments, LegacyLoanDeductions = i.LegacyLoanDeductions, EmployeeExpenseRecoveries = i.EmployeeExpenseRecoveries,
             DeductionsTotal = i.DeductionsTotal,
             OtherDeductions = i.OtherDeductions,
             GrossEarnings = i.GrossEarnings,
@@ -509,7 +576,7 @@ public class ReportService
             IsManuallyAdjusted = i.IsManuallyAdjusted,
             LastEditedAt = i.LastEditedAt,
             LastEditedBy = i.LastEditedBy
-        }).ToListAsync(ct);
+        }).ToList();
 
         await MarkNeedsReviewAsync(payrollRunId, rows, ct);
         return rows;
@@ -525,12 +592,12 @@ public class ReportService
 
         var run = await _db.PayrollRuns.AsNoTracking()
             .Where(r => r.Id == payrollRunId)
-            .Select(r => new { r.Year, r.Month })
+            .Select(r => new { r.Year, r.Month, r.PeriodStart, r.PeriodEnd })
             .FirstOrDefaultAsync(ct);
         if (run is null) return;
 
-        var first = new DateTime(run.Year, run.Month, 1);
-        var last = first.AddMonths(1).AddDays(-1);
+        var period = PayrollPeriod.StoredOrLegacy(run.PeriodStart,run.PeriodEnd,run.Year,run.Month);
+        var first = period.Start; var last = period.End;
 
         var flagged = await _db.DailyAttendances.AsNoTracking()
             .Where(d => d.WorkDate >= first && d.WorkDate <= last
@@ -544,7 +611,7 @@ public class ReportService
 
         foreach (var r in rows)
         {
-            r.NeedsReview = flaggedSet.Contains(r.EmployeeId)
+            r.NeedsReview = r.AttendanceMissingDays > 0 || r.FinancialReviewReason != null || flaggedSet.Contains(r.EmployeeId)
                             || (r.OriginalAbsenceDays > 0 && r.AbsenceDays <= 0 && r.AnnualLeaveDays <= 0)
                             || r.AnnualLeaveBalance < 0;
         }
@@ -558,7 +625,7 @@ public class ReportService
         if (item is null) return null;
 
         var run = await _db.PayrollRuns.AsNoTracking().FirstAsync(r => r.Id == item.PayrollRunId, ct);
-        var all = await GetPayrollRowsAsync(run.Id, ct: ct);
+        var all = await GetPayrollRowsAsync(run.Id, employeeId: item.EmployeeId, ct: ct);
         var row = all.First(r => r.PayrollItemId == payrollItemId);
 
         var settings = await _settings.GetAllAsync(ct);
@@ -567,12 +634,18 @@ public class ReportService
             PayrollRunId = run.Id,
             Year = run.Year,
             Month = run.Month,
+            PeriodText = PayrollPeriod.ForRun(run).Display,
             RunStatus = run.Status,
             CompanyName = settings.TryGetValue(SettingKeys.CompanyName, out var cn) ? cn : "HR & Payroll",
             Currency = settings.TryGetValue(SettingKeys.Currency, out var cur) ? cur : "EGP",
             Item = row
         };
 
+        if (item.UncoveredDeductions > 0) slip.Notes.Add($"صافي سالب وفق السياسة المعتمدة؛ فرق الخصومات {item.UncoveredDeductions:N2} محفوظ دون إنشاء خصم في دورة لاحقة.");
+        if (row.IsProvisional) slip.Notes.Add("مسودة: صافي الدورة توقع للراتب الشهري وليس إقراراً بكسب راتب الشهر بالكامل. المستحق حتى التاريخ موضح بشكل منفصل.");
+        if (item.AttendanceMissingDays > 0) slip.Notes.Add($"بيانات {item.AttendanceMissingDays} يوم عمل غير مكتملة حتى {item.EarningsAsOf:yyyy-MM-dd}؛ لم تُعتبر الأيام المفقودة أو المستقبلية غياباً تلقائياً.");
+        if (item.EarlyLeaveDeduction > 0) slip.Notes.Add($"خصم الانصراف المبكر: {item.EarlyLeaveMinutes} دقيقة خاضعة للخصم × سعر الدقيقة {item.MinuteRate:0.########}، بعد سماح الخروج المحفوظ.");
+        if (item.ShortageDeduction > 0) slip.Notes.Add("خصم الوقت المفقود يشمل التأخير والانصراف المبكر؛ لم يُخصما مرة أخرى.");
         if (item.ApprovedOvertimeHours > 0)
             slip.Notes.Add($"الإضافي بسعر الساعة {row.HourlyRate:0.##} (بدون أي مضاعف).");
         if (item.PaidRestDays > 0)

@@ -17,6 +17,15 @@ namespace HrPayroll.Tests;
 public class SchemaConsistencyTests
 {
     [Fact]
+    public void SqlServer_Model_Matches_Reviewed_Migration_Snapshot_Without_Opening_A_Connection()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlServer("Server=unused.invalid;Database=SchemaOnly;Integrated Security=True;TrustServerCertificate=True")
+            .Options;
+        using var ctx = new AppDbContext(options);
+        Assert.False(ctx.Database.HasPendingModelChanges());
+    }
+    [Fact]
     public void Every_Entity_Table_And_Column_Is_Created_By_A_Migration()
     {
         using var db = new TestDb();

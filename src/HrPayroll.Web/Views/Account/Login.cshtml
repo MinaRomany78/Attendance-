@@ -12,7 +12,7 @@
     <div class="login-app">نظام الحضور والموارد البشرية</div>
     <h1>تسجيل الدخول</h1>
 
-    @if (showDemoHint)
+    @* @if (showDemoHint)
     {
         var demoEmail = ViewData["DemoAdminEmail"] as string;
         <div class="auth-demo-hint" role="note">
@@ -28,7 +28,7 @@
                 <span>لم يُضبط حساب المسؤول. راجع قسم <span dir="ltr">AdminAccount</span> في appsettings.json.</span>
             }
         </div>
-    }
+    } *@
 
     <form asp-action="Login" method="post" class="auth-form" autocomplete="on" novalidate>
         <input type="hidden" name="returnUrl" value="@ViewData["ReturnUrl"]" />

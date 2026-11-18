@@ -1,221 +1,161 @@
+@using HrPayroll.Domain.Services
 @using HrPayroll.Domain.Enums
 @using HrPayroll.Infrastructure.Import
+@using Microsoft.AspNetCore.Mvc.Rendering
 @model HrPayroll.Web.ViewModels.ImportFilesViewModel
 @{
-    ViewData["Title"] = "معاينة ملفات البصمة";
-    var failedZones = Model.Zones.Where(z => z.Provided && !z.Ok).ToList();
+    ViewData["Title"] = "معاينة البصمات قبل الاستيراد";
+    var provided = Model.Zones.Where(z => z.Provided).ToList();
+    var employees = ViewBag.Employees as List<SelectListItem> ?? new List<SelectListItem>();
+    var reviewCount = Model.Zones.Where(z => z.Ok).Sum(z => z.Analysis?.ReviewCount ?? 0);
 }
-
-<div class="card">
-    <div class="card-head">
-        <div>
-            <h2>معاينة ملفات البصمة قبل الاستيراد</h2>
-            <div class="sub">لم يُكتب أي شيء في قاعدة البيانات بعد. راجع نتيجة كل ملف على حدة ثم أكّد الاستيراد.</div>
-        </div>
-        <a class="btn btn-ghost btn-sm" asp-action="Index">رفع ملفات أخرى</a>
+<link rel="stylesheet" href="~/css/attendance-import.css" asp-append-version="true" />
+<div class="attendance-import">
+    <div class="page-hero">
+        <div class="page-hero-ico" aria-hidden="true">✓</div>
+        <div class="page-hero-body"><h1>معاينة البصمات قبل الاستيراد</h1><p class="sub">راجع السجلات ومطابقة الموظفين. لم يتم حفظ أي بصمات بعد.</p></div>
+        <div class="page-hero-actions"><a class="btn btn-ghost" asp-action="Index">اختيار ملفات أخرى</a></div>
     </div>
-</div>
-
-<div class="stat-grid">
-    <div class="stat @(Model.FilesWithNewRecords > 0 ? "ok" : "warn")">
-        <div class="label">ملفات بها سجلات جديدة</div><div class="value">@Model.FilesWithNewRecords <small>من 2</small></div>
+    <ol class="import-steps" aria-label="مراحل الاستيراد"><li><span>✓</span> اختيار الملف</li><li class="current" aria-current="step"><span>2</span> تحليل ومراجعة</li><li><span>3</span> تأكيد الاستيراد</li></ol>
+    <div class="import-summary" aria-label="ملخص تحليل الملفات">
+        <div class="import-metric"><span>إجمالي السجلات</span><strong>@Model.TotalRecords</strong></div>
+        <div class="import-metric valid"><span>سجلات صالحة جديدة</span><strong>@Model.TotalAccepted</strong></div>
+        <div class="import-metric"><span>حركات الدخول</span><strong>@Model.TotalCheckIns</strong></div>
+        <div class="import-metric"><span>حركات الخروج</span><strong>@Model.TotalCheckOuts</strong></div>
+        <div class="import-metric duplicate"><span>سجلات مكررة</span><strong>@Model.TotalDuplicates</strong></div>
+        <div class="import-metric review"><span>موظفون غير مطابقين</span><strong>@Model.TotalUnknownEmployees</strong></div>
+        <div class="import-metric invalid"><span>سجلات غير صالحة</span><strong>@Model.TotalInvalid</strong></div>
+        <div class="import-metric review"><span>سجلات تحتاج مراجعة</span><strong>@reviewCount</strong></div>
     </div>
-    <div class="stat"><div class="label">إجمالي السجلات المقروءة</div><div class="value">@Model.Zones.Where(z => z.Ok).Sum(z => z.Total)</div></div>
-    <div class="stat ok"><div class="label">سجلات جديدة مقبولة</div><div class="value">@Model.TotalAccepted</div></div>
-    <div class="stat warn"><div class="label">سجلات مكررة</div><div class="value">@Model.TotalDuplicates</div></div>
-    <div class="stat bad"><div class="label">تحتاج إلى مراجعة</div><div class="value">@Model.TotalNeedsReview</div></div>
-</div>
-
-@if (failedZones.Count > 0)
-{
-    <div class="alert alert-warning">
-        <span>
-            لم يجتز كل الملفات التحقق: @string.Join(" — ", failedZones.Select(z => $"{z.Title}: {z.Error}"))
-            . سيتم استيراد الملفات الصالحة فقط، ولن تُستورد الملفات المرفوضة.
-        </span>
-    </div>
-}
-
-@foreach (var z in Model.Zones)
-{
-    <div class="card @(z.Ok ? "" : "zone-failed")">
-        <div class="card-head">
-            <div>
-                <h3>@z.Icon @z.Title — @(z.FileName ?? "لم يتم اختيار ملف")</h3>
-                <div class="sub">
-                    @if (z.Ok)
-                    {
-                        <span>@z.FormatName · @z.PeriodText</span>
-                        @if (z.Analysis?.UsedFallback == true)
-                        {
-                            <span> · تم استخدام الربط الاحتياطي للأعمدة</span>
-                        }
-                    }
-                    else
-                    {
-                        <span>@z.StatusText</span>
-                    }
-                </div>
+    @foreach (var z in provided)
+    {
+        <section class="card">
+            <div class="card-head">
+                <div><h2>@z.Title</h2><p class="sub"><bdi>@z.FileName</bdi> · @z.FormatName @if (z.Ok) { <span>· @z.PeriodText · @z.Analysis?.EncodingName</span> }</p></div>
+                <span class="import-status @(z.Ok ? "valid" : "invalid")">@(z.Ok ? "اكتمل التحليل" : "تعذّر التحليل")</span>
             </div>
-            <span class="file-state @z.StatusClass">@z.StatusText</span>
-        </div>
-
-        @if (z.Error is not null)
-        {
-            <div class="card-body">
-                <div class="alert alert-danger"><span>@z.Error</span></div>
-            </div>
-        }
-        else if (z.Analysis is { HasMapping: true } a)
-        {
-            <div class="card-body">
-                <div class="stat-grid">
-                    <div class="stat"><div class="label">سجلات مقروءة</div><div class="value">@z.Total</div></div>
-                    <div class="stat ok"><div class="label">مقبولة للاستيراد</div><div class="value">@z.Accepted</div></div>
-                    <div class="stat warn"><div class="label">مكررة</div><div class="value">@z.Duplicates <small>(منها @z.AlreadyImported مستورد سابقًا)</small></div></div>
-                    <div class="stat bad"><div class="label">موظف غير مسجل</div><div class="value">@z.UnknownEmployees</div></div>
-                    <div class="stat bad"><div class="label">تاريخ/وقت غير صالح</div><div class="value">@z.Invalid</div></div>
-                </div>
-
-                <div class="section-title">الأعمدة المكتشفة في الملف</div>
-                <div class="table-wrap">
-                    <table class="data">
-                        <thead><tr><th>الحقل</th><th>العمود</th></tr></thead>
-                        <tbody>
-                        @if (a.Mapping!.No.HasValue) { <tr><td>رقم الصف</td><td>@Header(z, a.Mapping.No)</td></tr> }
-                        @if (a.Mapping.DeviceId.HasValue) { <tr><td>رقم الجهاز</td><td>@Header(z, a.Mapping.DeviceId)</td></tr> }
-                        @if (a.Mapping.EmployeeCode.HasValue) { <tr><td>كود الموظف/البصمة</td><td>@Header(z, a.Mapping.EmployeeCode)</td></tr> }
-                        @if (a.Mapping.Name.HasValue) { <tr><td>الاسم</td><td>@Header(z, a.Mapping.Name)</td></tr> }
-                        @if (a.Mapping.AttType.HasValue) { <tr><td>نوع الحركة</td><td>@Header(z, a.Mapping.AttType)</td></tr> }
-                        @if (a.Mapping.AttTime.HasValue) { <tr><td>وقت البصمة</td><td>@Header(z, a.Mapping.AttTime)</td></tr> }
-                        </tbody>
-                    </table>
-                </div>
-
-                @if (z.NeedsReview > 0)
-                {
-                    <div class="alert alert-warning" style="margin-top:12px">
-                        <span>
-                            @z.NeedsReview سجل يحتاج إلى مراجعة في هذا الملف. لن يمنع ذلك الاستيراد،
-                            وستظهر هذه السجلات في شاشة «الاستثناءات والمراجعة» بعد المعالجة.
-                        </span>
+            @if (!z.Ok)
+            {
+                <div class="card-body"><div class="alert alert-danger" role="alert"><span>@(z.Error ?? z.StatusText)</span></div><p class="import-help">صحّح الملف ثم أعد رفعه. يمكنك تأكيد السجلات الصالحة في الملفات الأخرى.</p></div>
+            }
+            else if (z.Analysis is { } a)
+            {
+                <div class="card-body">
+                    <div class="import-file-toolbar"><span class="import-help">@z.Total سجل · @z.Accepted صالح جديد · @z.Duplicates مكرر</span>
+                        <form method="post" asp-action="Validation">
+                            <input type="hidden" name="token" value="@z.Token" />
+                            @foreach (var staged in provided.Where(x => !string.IsNullOrWhiteSpace(x.Token))) { <input type="hidden" name="tokens" value="@staged.Token" /> }
+                            <button type="submit" class="btn btn-soft btn-sm" data-no-spinner>تصدير نتائج التحقق إلى Excel</button>
+                        </form>
                     </div>
-                }
-
-                @if (a.Preview.Count > 0)
-                {
-                    <div class="section-title">أول @a.Preview.Count صف من المعاينة</div>
-                    <div class="table-wrap">
-                        <table class="data">
-                            <thead><tr><th>صف</th><th>النتيجة</th><th>كود الجهاز</th><th>الاسم</th><th>النوع</th><th>الوقت الخام</th><th>الوقت المحوّل</th><th>ملاحظة</th></tr></thead>
-                            <tbody>
-                            @foreach (var r in a.Preview)
+                    @if (a.Mapping?.IsZkExport == true)
+                    {
+                        <p class="import-notice"><strong>تم اكتشاف صيغة ZKTeco</strong><span>كود البصمة: العمود الأول · الوقت: العمود الثاني · الاسم: العمود الخامس · الحركة: العمود السادس. بيانات الجهاز الإضافية محفوظة كما وردت دون افتراض معناها.</span></p>
+                    }
+                    @if (a.UnknownEmployeeCount > 0)
+                    {
+                        <details class="import-mapping" open>
+                            <summary>حل مطابقة أكواد البصمة غير المعروفة (@a.UnknownEmployeeCount سجل)</summary>
+                            <p class="import-help">اختر موظفًا موجودًا لكل كود، ثم أعد التحليل. يُحدّث الربط كود البصمة فقط بعد التحقق من عدم تكراره؛ لا تُنشأ حسابات موظفين من السجلات.</p>
+                            @if (employees.Count == 0)
                             {
-                                var cls = r.Status switch
-                                {
-                                    ImportRowStatus.Success => "ok",
-                                    ImportRowStatus.Duplicate => "warn",
-                                    _ => "bad"
-                                };
-                                <tr>
-                                    <td class="num">@r.RowNumber</td>
-                                    <td><span class="badge @cls">@RowStatusText(r.Status)</span></td>
-                                    <td class="num">@(r.DeviceEmployeeCode ?? "-")</td>
-                                    <td>@(r.Name ?? "-")</td>
-                                    <td>@(r.AttType ?? "-")</td>
-                                    <td class="num">@(r.RawPunchTime ?? "-")</td>
-                                    <td class="num">@(r.PunchTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</td>
-                                    <td class="wrap">@(r.Message ?? "-")</td>
+                                <p class="import-help">لا يوجد موظفون بلا كود بصمة متاحون للربط. راجع أكواد الموظفين الحالية، ثم أعد تحليل الملف بعد تصحيحها.</p>
+                                <a class="btn btn-soft btn-sm" asp-controller="Employees" asp-action="Index">مراجعة أكواد الموظفين</a>
+                            }
+                            @foreach (var code in a.Rows.Where(r => employees.Count > 0 && r.Status == ImportRowStatus.UnknownEmployee && !string.IsNullOrWhiteSpace(r.DeviceEmployeeCode)).Select(r => r.DeviceEmployeeCode!).Distinct(StringComparer.OrdinalIgnoreCase))
+                            {
+                                var mappingId = $"mapping-{z.Key}-{Guid.NewGuid():N}";
+                                <form method="post" asp-action="ResolveMapping" class="import-map-form">
+                                    <input type="hidden" name="token" value="@z.Token" />
+                                    @foreach (var staged in provided.Where(x => !string.IsNullOrWhiteSpace(x.Token))) { <input type="hidden" name="tokens" value="@staged.Token" /> }
+                                    <input type="hidden" name="deviceEmployeeCode" value="@code" />
+                                    <span>كود البصمة <strong dir="ltr">@code</strong></span>
+                                    <label class="visually-hidden" for="@mappingId">الموظف المطابق لكود @code</label>
+                                    <select name="employeeId" id="@mappingId" required><option value="">اختر الموظف في النظام</option>@foreach (var employee in employees) { <option value="@employee.Value">@employee.Text</option> }</select>
+                                    <button type="submit" class="btn btn-soft btn-sm">حفظ الربط وإعادة التحليل</button>
+                                </form>
+                            }
+                        </details>
+                    }
+                    @if (a.InvalidCount + a.UnknownEmployeeCount + a.ReviewCount > 0)
+                    {
+                        <div class="alert alert-warning"><span>تحتاج بعض السجلات إلى تصحيح أو مراجعة. تُستورد السجلات الصالحة فقط؛ تبقى السجلات الأخرى في تقرير التحقق.</span></div>
+                    }
+                    <div data-preview-filter>
+                        <div class="import-filters">
+                            <div><label for="search-@z.Key">بحث في السجلات</label><input type="search" id="search-@z.Key" data-filter-search placeholder="كود، اسم أو رسالة تحقق" /></div>
+                            <div><label for="employee-@z.Key">كود البصمة</label><select id="employee-@z.Key" data-filter-employee><option value="">كل الموظفين</option>@foreach (var code in a.Rows.Select(r => r.DeviceEmployeeCode).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().OrderBy(c => c)) { <option value="@code">@code</option> }</select></div>
+                            <div><label for="date-@z.Key">تاريخ البصمة</label><input type="date" id="date-@z.Key" data-filter-date /></div>
+                            <div><label for="status-@z.Key">حالة التحقق</label><select id="status-@z.Key" data-filter-status><option value="">كل الحالات</option><option value="Success">صالح</option><option value="NeedsReview">يتطلب مراجعة</option><option value="UnknownEmployee">موظف غير مطابق</option><option value="Invalid">غير صالح</option><option value="Duplicate">مكرر</option></select></div>
+                            <button type="button" class="btn btn-ghost btn-sm" data-reset-filters>مسح الفلاتر</button>
+                        </div>
+                        <div class="import-table-meta"><span data-visible-count aria-live="polite">@a.Rows.Count سجل ظاهر</span><span class="import-help">الوقت المحلي للجهاز · دون تحويل إلى UTC</span></div>
+                        <div class="table-wrap import-preview-scroll" tabindex="0" role="region" aria-label="سجلات معاينة @z.FileName"><table class="data import-table">
+                            <caption class="visually-hidden">جميع سجلات الملف @z.FileName ونتائج التحقق</caption>
+                            <thead><tr><th scope="col">الصف</th><th scope="col">كود البصمة</th><th scope="col">الاسم من الملف</th><th scope="col">الموظف في النظام</th><th scope="col">التاريخ</th><th scope="col">الوقت</th><th scope="col">الحركة</th><th scope="col">الجهاز / المصدر</th><th scope="col">الحالة</th><th scope="col">رسالة التحقق</th></tr></thead>
+                            <tbody>
+                            @foreach (var r in a.Rows)
+                            {
+                                var direction = PunchClassifier.ParseExplicitDirection(r.AttType);
+                                var status = r.Status is ImportRowStatus.InvalidDateTime or ImportRowStatus.InvalidRow ? "Invalid" : r.Status.ToString();
+                                <tr data-preview-row data-employee="@r.DeviceEmployeeCode" data-date="@r.PunchTime?.ToString("yyyy-MM-dd")" data-status="@status">
+                                    <td class="num">@r.RowNumber</td><td class="num"><strong>@(r.DeviceEmployeeCode ?? "—")</strong></td><td class="wrap">@(r.Name ?? "—")</td><td class="wrap">@(r.MatchedEmployeeName ?? "غير مطابق")</td>
+                                    <td class="num">@(r.PunchTime?.ToString("yyyy-MM-dd") ?? "—")</td><td class="num">@(r.PunchTime?.ToString("HH:mm:ss") ?? r.RawPunchTime ?? "—")</td>
+                                    <td><span class="import-direction">@DirectionText(direction)</span><small class="import-cell-sub">@(r.AttType ?? "—")</small></td>
+                                    <td><bdi>@(r.DeviceId ?? r.Source ?? z.FileName ?? "ملف يدوي")</bdi></td>
+                                    <td><span class="import-status @StatusClass(r.Status)">@StatusText(r.Status)</span></td>
+                                    <td class="wrap import-validation-message">@(r.Message ?? "اجتاز التحقق")
+                                        @if (r.OriginalFields.Length > 0)
+                                        {
+                                            <details class="import-original"><summary>البيانات الأصلية</summary><code dir="ltr">@string.Join(" | ", r.OriginalFields)</code></details>
+                                        }
+                                    </td>
                                 </tr>
                             }
+                            <tr data-preview-empty hidden><td colspan="10"><div class="import-empty"><h3>لا توجد سجلات مطابقة</h3><p>جرّب تعديل البحث أو مسح الفلاتر.</p></div></td></tr>
                             </tbody>
-                        </table>
+                        </table></div>
                     </div>
-                }
-            </div>
-        }
-        else
-        {
-            <div class="card-body"><div class="alert alert-warning"><span>لم يتم اختيار ملف في هذه المنطقة.</span></div></div>
-        }
-    </div>
-}
-
-<div class="card">
-    <div class="card-head"><h3>تأكيد الاستيراد ومعالجة الحضور</h3></div>
-    <div class="card-body">
-        @if (!Model.CanConfirm)
-        {
-            if (Model.ValidFiles == 0)
-            {
-                <div class="alert alert-danger">
-                    <span>لا يوجد أي ملف صالح للاستيراد. صحّح الملفات غير الصالحة ثم أعد الرفع.</span>
                 </div>
+            }
+        </section>
+    }
+    <section class="card import-confirm">
+        <div class="card-head"><h2>تأكيد استيراد البصمات</h2></div>
+        <div class="card-body">
+            @if (Model.CanConfirm)
+            {
+                <p>سيتم حفظ <strong>@Model.TotalAccepted</strong> بصمة صالحة جديدة. تُفحص التكرارات مرة أخرى عند التأكيد لضمان عدم تكرار السجلات بين الملفات.</p>
+                <form method="post" asp-action="Confirm" data-loading-text="جارٍ استيراد البصمات ومعالجة الحضور...">
+                    @foreach (var zone in provided.Where(z => z.Ok))
+                    {
+                        <input type="hidden" name="@(zone.Key)Token" value="@zone.Token" />
+                        <input type="hidden" name="@(zone.Key)Name" value="@zone.FileName" />
+                    }
+                    <label class="import-checkbox"><input type="checkbox" name="processAttendance" value="true" checked /><span>معالجة الحضور تلقائيًا للفترة المكتشفة وفق الورديات والسياسات الحالية</span></label>
+                    <input type="hidden" name="processAttendance" value="false" />
+                    <div class="import-form-actions"><button type="submit" class="btn btn-primary btn-lg">تأكيد الاستيراد</button></div>
+                </form>
             }
             else
             {
-                <div class="alert alert-success">
-                    <span>
-                        لا توجد سجلات جديدة في هذه الملفات: كل البصمات مستوردة مسبقًا ولم تُضف أي بصمة مكررة.
-                        لا حاجة لإعادة الاستيراد.
-                    </span>
-                </div>
+                <div class="alert @(Model.TotalDuplicates > 0 && Model.TotalInvalid + Model.TotalUnknownEmployees + reviewCount == 0 ? "alert-success" : "alert-warning")"><span>@(Model.TotalDuplicates > 0 && Model.TotalInvalid + Model.TotalUnknownEmployees + reviewCount == 0 ? "كل البصمات مستوردة مسبقًا أو مكررة؛ لا توجد سجلات جديدة للحفظ." : "لا توجد سجلات صالحة جديدة. راجع المطابقة ورسائل التحقق، ثم أعد تحليل الملف.")</span></div>
             }
-            <div class="btn-row">
-                <a class="btn btn-primary" asp-action="Index">رجوع إلى صفحة الرفع</a>
-                <a class="btn btn-ghost" asp-controller="Attendance" asp-action="Index">الحضور اليومي</a>
-            </div>
-        }
-        else
-        {
-            <form method="post" asp-action="Confirm" data-loading-text="جارٍ الاستيراد ومعالجة الحضور...">
-                @* يُستورد فقط الملف الذي يحمل سجلات جديدة؛ ملف كل بصماته مكررة لا يُسجَّل مرة أخرى. *@
-                @if (Model.Entry?.HasNewRecords == true)
-                {
-                    <input type="hidden" name="entryToken" value="@Model.Entry.Token" />
-                    <input type="hidden" name="entryName" value="@Model.Entry.FileName" />
-                }
-                @if (Model.Exit?.HasNewRecords == true)
-                {
-                    <input type="hidden" name="exitToken" value="@Model.Exit.Token" />
-                    <input type="hidden" name="exitName" value="@Model.Exit.FileName" />
-                }
-
-                <label class="switch" style="margin-bottom:14px">
-                    <input type="checkbox" name="processAttendance" value="true" checked />
-                    <span>معالجة الحضور تلقائيًا بعد الاستيراد للفترة المكتشفة في الملفات</span>
-                </label>
-
-                <div class="alert alert-info">
-                    <span>
-                        سيتم استيراد @Model.TotalAccepted بصمة جديدة من @Model.FilesWithNewRecords ملف. السجلات المكررة والمرفوضة لن تُستورد ولن تُكرَّر،
-                        ويمكن مراجعة الملفات غير الصالحة بعد التصحيح وإعادة الرفع دون مضاعفة السجلات.
-                    </span>
-                </div>
-
-                <div class="btn-row">
-                    <button type="submit" class="btn btn-accent btn-lg">تأكيد الاستيراد ومعالجة الحضور</button>
-                    <a class="btn btn-ghost btn-lg" asp-action="Index">إلغاء</a>
-                </div>
+            <form method="post" asp-action="Cancel" class="import-cancel-form">
+                @foreach (var zone in provided.Where(z => !string.IsNullOrWhiteSpace(z.Token))) { <input type="hidden" name="tokens" value="@zone.Token" /> }
+                <button type="submit" class="btn btn-ghost">إلغاء المعاينة وحذف الملفات المؤقتة</button>
             </form>
-        }
-    </div>
+        </div>
+    </section>
 </div>
-
+@section Scripts { <script src="~/js/attendance-import.js" asp-append-version="true"></script> }
 @functions {
-    private string Header(HrPayroll.Web.ViewModels.ImportFileZoneViewModel z, int? index)
-    {
-        var headers = z.Analysis?.Headers ?? new List<string>();
-        return index.HasValue && index.Value < headers.Count ? headers[index.Value] : $"العمود #{index + 1}";
-    }
-
-    private static string RowStatusText(ImportRowStatus status) => status switch
-    {
-        ImportRowStatus.Success => "مقبول",
-        ImportRowStatus.Duplicate => "مكرر",
-        ImportRowStatus.UnknownEmployee => "موظف غير مسجل",
-        ImportRowStatus.InvalidDateTime => "تاريخ غير صالح",
-        ImportRowStatus.InvalidRow => "صف غير صالح",
-        _ => "غير معروف"
+    private static string StatusText(ImportRowStatus status) => status switch {
+        ImportRowStatus.Success => "صالح", ImportRowStatus.Duplicate => "مكرر", ImportRowStatus.UnknownEmployee => "موظف غير مطابق",
+        ImportRowStatus.NeedsReview => "يتطلب مراجعة", ImportRowStatus.InvalidDateTime => "وقت غير صالح", ImportRowStatus.InvalidRow => "سجل غير صالح", _ => "غير معروف"
     };
+    private static string StatusClass(ImportRowStatus status) => status switch {
+        ImportRowStatus.Success => "valid", ImportRowStatus.Duplicate => "duplicate", ImportRowStatus.UnknownEmployee or ImportRowStatus.NeedsReview => "review", _ => "invalid"
+    };
+    private static string DirectionText(PunchDirection direction) => direction switch { PunchDirection.In => "دخول", PunchDirection.Out => "خروج", _ => "غير محدد" };
 }

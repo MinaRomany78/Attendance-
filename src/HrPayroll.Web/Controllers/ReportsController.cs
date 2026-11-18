@@ -1,3 +1,4 @@
+using HrPayroll.Domain.Models;
 using HrPayroll.Domain.Enums;
 using HrPayroll.Infrastructure.Persistence;
 using HrPayroll.Infrastructure.Services;
@@ -25,11 +26,12 @@ public class ReportsController : Controller
         _pdf = pdf;
     }
 
-    private AttendanceReportFilter Build(DateTime? from, DateTime? to, string? department, int? employeeId,
-        int? shiftId, int? status, string? search)
+    private async Task<AttendanceReportFilter> BuildAsync(DateTime? from, DateTime? to, string? department, int? employeeId,
+        int? shiftId, int? status, string? search, CancellationToken ct = default)
     {
-        var f = (from ?? new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)).Date;
-        var t = (to ?? DateTime.Today).Date;
+        var today = await CompanyPayrollClock.TodayAsync(_db,ct);
+        var f = (from ?? PayrollPeriod.FromDate(today).Start).Date;
+        var t = (to ?? today).Date;
         if (t < f) (f, t) = (t, f);
         return new AttendanceReportFilter
         {
@@ -42,7 +44,7 @@ public class ReportsController : Controller
     public async Task<IActionResult> Index(DateTime? from, DateTime? to, string? department, int? employeeId,
         int? shiftId, CancellationToken ct)
     {
-        var filter = Build(from, to, department, employeeId, shiftId, null, null);
+        var filter = await BuildAsync(from, to, department, employeeId, shiftId, null, null, ct);
         var daily = await _reports.GetDailyAttendanceAsync(filter, ct);
         var departmentGroups = await _reports.GetDepartmentJobTitleReportAsync(filter, null, ct);
 
@@ -67,7 +69,7 @@ public class ReportsController : Controller
     public async Task<IActionResult> Daily(DateTime? from, DateTime? to, string? department, int? employeeId,
         int? shiftId, int? status, string? search, bool groupByDepartment = true, CancellationToken ct = default)
     {
-        var filter = Build(from, to, department, employeeId, shiftId, status, search);
+        var filter = await BuildAsync(from, to, department, employeeId, shiftId, status, search, ct);
         var rows = await _reports.GetDailyAttendanceAsync(filter, ct);
         return View(new DailyReportViewModel
         {
@@ -84,7 +86,7 @@ public class ReportsController : Controller
     public async Task<IActionResult> Overtime(DateTime? from, DateTime? to, string? department, int? employeeId,
         int? shiftId, CancellationToken ct)
     {
-        var filter = Build(from, to, department, employeeId, shiftId, null, null);
+        var filter = await BuildAsync(from, to, department, employeeId, shiftId, null, null, ct);
         ViewBag.Filter = filter;
         ViewBag.Employees = await _db.Employees.AsNoTracking().OrderBy(e => e.FullName).ToListAsync(ct);
         ViewBag.Shifts = await _db.Shifts.AsNoTracking().OrderBy(s => s.ShiftNumber).ToListAsync(ct);
@@ -95,7 +97,7 @@ public class ReportsController : Controller
     public async Task<IActionResult> Absence(DateTime? from, DateTime? to, string? department, int? employeeId,
         CancellationToken ct)
     {
-        var filter = Build(from, to, department, employeeId, null, null, null);
+        var filter = await BuildAsync(from, to, department, employeeId, null, null, null, ct);
         ViewBag.Filter = filter;
         ViewBag.Employees = await _db.Employees.AsNoTracking().OrderBy(e => e.FullName).ToListAsync(ct);
         ViewBag.Departments = await _db.Departments.AsNoTracking().OrderBy(d => d.Name).ToListAsync(ct);
@@ -109,7 +111,7 @@ public class ReportsController : Controller
     public async Task<IActionResult> Departments(DateTime? from, DateTime? to, string? department, string? jobTitle,
         int? employeeId, int? shiftId, string? search, CancellationToken ct)
     {
-        var filter = Build(from, to, department, employeeId, shiftId, null, search);
+        var filter = await BuildAsync(from, to, department, employeeId, shiftId, null, search, ct);
         return View(new DepartmentReportViewModel
         {
             Filter = filter,
@@ -128,7 +130,7 @@ public class ReportsController : Controller
     public async Task<IActionResult> Leaves(DateTime? from, DateTime? to, string? department, int? employeeId,
         LeaveType? leaveType, ApprovalStatus? status, string? search, CancellationToken ct)
     {
-        var filter = Build(from, to, department, employeeId, null, null, search);
+        var filter = await BuildAsync(from, to, department, employeeId, null, null, search, ct);
         return View(new LeaveReportViewModel
         {
             Filter = filter,
@@ -151,38 +153,38 @@ public class ReportsController : Controller
 
     public async Task<IActionResult> ExportDailyExcel(DateTime? from, DateTime? to, string? department, int? employeeId,
         int? shiftId, int? status, string? search, CancellationToken ct)
-        => Xlsx(await _excel.ExportDailyAttendanceAsync(Build(from, to, department, employeeId, shiftId, status, search), ct), "Daily_Attendance");
+        => Xlsx(await _excel.ExportDailyAttendanceAsync(await BuildAsync(from, to, department, employeeId, shiftId, status, search, ct), ct), "Daily_Attendance");
 
     public async Task<IActionResult> ExportDailyPdf(DateTime? from, DateTime? to, string? department, int? employeeId,
         int? shiftId, int? status, string? search, CancellationToken ct)
-        => PdfFile(await _pdf.BuildAttendanceReportAsync(Build(from, to, department, employeeId, shiftId, status, search), ct), "Daily_Attendance");
+        => PdfFile(await _pdf.BuildAttendanceReportAsync(await BuildAsync(from, to, department, employeeId, shiftId, status, search, ct), ct), "Daily_Attendance");
 
     public async Task<IActionResult> ExportDepartmentExcel(DateTime? from, DateTime? to, string? department,
         int? employeeId, int? shiftId, CancellationToken ct)
-        => Xlsx(await _excel.ExportDepartmentReportAsync(Build(from, to, department, employeeId, shiftId, null, null), ct), "Department_Report");
+        => Xlsx(await _excel.ExportDepartmentReportAsync(await BuildAsync(from, to, department, employeeId, shiftId, null, null, ct), ct), "Department_Report");
 
     /// <summary>تصدير تقرير الأقسام بأسماء الموظفين تحت كل قسم ومسمّى وظيفي.</summary>
     public async Task<IActionResult> ExportDepartmentsExcel(DateTime? from, DateTime? to, string? department,
         string? jobTitle, int? employeeId, int? shiftId, string? search, CancellationToken ct)
         => Xlsx(await _excel.ExportDepartmentJobTitleAsync(
-            Build(from, to, department, employeeId, shiftId, null, search), jobTitle, ct), "Departments_Report");
+            await BuildAsync(from, to, department, employeeId, shiftId, null, search, ct), jobTitle, ct), "Departments_Report");
 
     public async Task<IActionResult> ExportLeavesExcel(DateTime? from, DateTime? to, string? department,
         int? employeeId, LeaveType? leaveType, ApprovalStatus? status, string? search, CancellationToken ct)
         => Xlsx(await _excel.ExportLeavesAsync(
-            Build(from, to, department, employeeId, null, null, search), leaveType, status, ct), "Leaves_Report");
+            await BuildAsync(from, to, department, employeeId, null, null, search, ct), leaveType, status, ct), "Leaves_Report");
 
     public async Task<IActionResult> ExportOvertimeExcel(DateTime? from, DateTime? to, string? department,
         int? employeeId, int? shiftId, CancellationToken ct)
-        => Xlsx(await _excel.ExportOvertimeAsync(Build(from, to, department, employeeId, shiftId, null, null), ct), "Overtime");
+        => Xlsx(await _excel.ExportOvertimeAsync(await BuildAsync(from, to, department, employeeId, shiftId, null, null, ct), ct), "Overtime");
 
     public async Task<IActionResult> ExportAbsenceExcel(DateTime? from, DateTime? to, string? department,
         int? employeeId, CancellationToken ct)
-        => Xlsx(await _excel.ExportAbsenceAsync(Build(from, to, department, employeeId, null, null, null), ct), "Absence");
+        => Xlsx(await _excel.ExportAbsenceAsync(await BuildAsync(from, to, department, employeeId, null, null, null, ct), ct), "Absence");
 
     public async Task<IActionResult> ExportRawPunches(DateTime? from, DateTime? to, int? employeeId, string? department, CancellationToken ct)
     {
-        var filter = Build(from, to, department, employeeId, null, null, null);
+        var filter = await BuildAsync(from, to, department, employeeId, null, null, null, ct);
         var bytes = await _excel.ExportRawPunchesAsync(new ExportFilter
         {
             From = filter.From, To = filter.To, EmployeeId = filter.EmployeeId, Department = filter.Department
@@ -192,15 +194,15 @@ public class ReportsController : Controller
 
     public async Task<IActionResult> ExportEntryExcel(DateTime? from, DateTime? to, string? department,
         int? employeeId, int? shiftId, CancellationToken ct)
-        => Xlsx(await _excel.ExportEventsAsync(Build(from, to, department, employeeId, shiftId, null, null), AttendanceEventType.Entry, ct), "Entry");
+        => Xlsx(await _excel.ExportEventsAsync(await BuildAsync(from, to, department, employeeId, shiftId, null, null, ct), AttendanceEventType.Entry, ct), "Entry");
 
     public async Task<IActionResult> ExportExitExcel(DateTime? from, DateTime? to, string? department,
         int? employeeId, int? shiftId, CancellationToken ct)
-        => Xlsx(await _excel.ExportEventsAsync(Build(from, to, department, employeeId, shiftId, null, null), AttendanceEventType.Exit, ct), "Exit");
+        => Xlsx(await _excel.ExportEventsAsync(await BuildAsync(from, to, department, employeeId, shiftId, null, null, ct), AttendanceEventType.Exit, ct), "Exit");
 
     public async Task<IActionResult> ExportFullWorkbook(DateTime? from, DateTime? to, string? department,
         int? employeeId, int? shiftId, CancellationToken ct)
-        => Xlsx(await _excel.ExportFullWorkbookAsync(Build(from, to, department, employeeId, shiftId, null, null), ct), "Full_Report");
+        => Xlsx(await _excel.ExportFullWorkbookAsync(await BuildAsync(from, to, department, employeeId, shiftId, null, null, ct), ct), "Full_Report");
 
     public async Task<IActionResult> ExportPayrollExcel(int? runId, CancellationToken ct)
     {

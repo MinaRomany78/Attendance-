@@ -53,7 +53,7 @@
     {
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>كود</th><th>الاسم</th><th>القسم</th><th>التاريخ</th><th>الحالة</th><th>تأخير (دقيقة)</th><th>انصراف مبكر</th><th>بصمة ناقصة</th><th>ملاحظات</th></tr></thead>
+                <thead><tr><th>كود</th><th>الاسم</th><th>القسم</th><th>التاريخ</th><th>الحالة</th><th>تأخير فعلي (ساعة)</th><th>انصراف مبكر (ساعة)</th><th>نقص مجدول (ساعة)</th><th>بصمة ناقصة</th><th>ملاحظات</th></tr></thead>
                 <tbody>
                 @foreach (var r in Model)
                 {
@@ -63,8 +63,9 @@
                         <td>@(r.Department ?? "-")</td>
                         <td class="num">@r.WorkDate.ToString("yyyy-MM-dd")</td>
                         <td><partial name="_StatusBadge" model="r.Status" /></td>
-                        <td class="num">@r.LateMinutes</td>
-                        <td class="num">@r.EarlyLeaveMinutes</td>
+                        <td class="num">@r.ActualLateHours.ToString("0.##")</td>
+                        <td class="num">@r.EarlyLeaveHours.ToString("0.##")</td>
+                        <td class="num">@(r.ActualMissingHours?.ToString("0.##") ?? "غير محسوم")</td>
                         <td>@(r.HasIncompletePunches ? "نعم" : "لا")</td>
                         <td class="wrap">@(r.Notes ?? "-")</td>
                     </tr>

@@ -62,8 +62,8 @@ public class PayrollSheetExportTests
         Assert.Equal("أيام الإجازة السنوية", ws.Cell(5, 11).GetString());
         Assert.Equal("رصيد الإجازة السنوية", ws.Cell(5, 12).GetString());
         Assert.Equal("ساعات الإضافي المعتمدة", ws.Cell(5, 16).GetString());
-        Assert.Equal("صافي الراتب", ws.Cell(5, 29).GetString());
-        Assert.Equal("حالة المراجعة", ws.Cell(5, 30).GetString());
+        Assert.Equal("صافي الدورة (متوقع للمسودة)", ws.Cell(5, 29).GetString());
+        Assert.Equal("حالة البيانات", ws.Cell(5, 30).GetString());
 
         // القيم المصدَّرة = القيم المحفوظة بعد التعديل (وليس الافتراضية)
         Assert.Equal(stored.OriginalAbsenceDays, ws.Cell(6, 9).GetValue<decimal>());
@@ -77,7 +77,8 @@ public class PayrollSheetExportTests
         // الحساب: 9000 + 300 − (2 × 300) = 8700
         Assert.Equal(8700m, stored.NetSalary);
         Assert.Equal(600m, stored.AbsenceDeduction);
-        Assert.Equal("مُعدَّل يدويًا", ws.Cell(6, 30).GetString());
+        Assert.True(stored.AttendanceMissingDays > 0);
+        Assert.Equal("يحتاج مراجعة", ws.Cell(6, 30).GetString());
     }
 
     private static void AddDays(AppDbContext ctx, int count, AttendanceStatus status, bool withPunch)

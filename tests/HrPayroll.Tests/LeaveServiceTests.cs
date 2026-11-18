@@ -143,6 +143,8 @@ public class LeaveServiceTests
 
         var service = Service(ctx);
         // اعتماد يومين فقط كإجازة سنوية
+        (await ctx.Employees.FirstAsync()).AnnualLeaveBalance = 21m;
+        await ctx.SaveChangesAsync();
         var leave = await service.ConvertAbsenceAsync(1, dates.Take(2), LeaveType.Annual, "اعتماد سنوية", "tester");
 
         Assert.Equal(2, leave.WorkingDays);

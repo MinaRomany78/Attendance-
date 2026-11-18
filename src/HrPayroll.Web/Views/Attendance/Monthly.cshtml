@@ -33,7 +33,7 @@
 <div class="page-hero">
     <div class="page-hero-ico" aria-hidden="true">▦</div>
     <div class="page-hero-body">
-        <h2>الحضور الشهري — @months[Model.Month - 1] @Model.Year</h2>
+        <h2>الحضور للدورة — @HrPayroll.Domain.Models.PayrollPeriod.ForMonth(Model.Year,Model.Month).Display</h2>
         <div class="sub">مصفوفة موظف × يوم من سجلات الحضور المعالجة</div>
     </div>
     <div class="page-hero-actions no-print">

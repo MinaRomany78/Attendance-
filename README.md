@@ -18,7 +18,7 @@ HrPayroll.sln
 src/HrPayroll.Domain          الكيانات، التعدادات، خدمات الحساب النقية
 src/HrPayroll.Infrastructure  EF Core، الترحيلات، الخدمات، الاستيراد والتصدير
 src/HrPayroll.Web             MVC Controllers + Views + ViewModels + static assets
-tests/HrPayroll.Tests         166 اختبارًا (حسابات، استيراد، تقارير، أمان)
+tests/HrPayroll.Tests         اختبارات الحسابات والاستيراد والتقارير والأمان والترحيلات
 ```
 
 ## المتطلبات
@@ -62,25 +62,35 @@ tests/HrPayroll.Tests         166 اختبارًا (حسابات، استيرا�
 
 ## الترحيلات وقاعدة البيانات
 
-سلسلة الترحيلات الحالية (ترحيل مدمج واحد ينشئ كامل المخطط: الموظفين، الورديات، الحضور، الرواتب، السلف، المصروفات، القروض، الإجازات):
+سلسلة الترحيلات الحالية (يجب تطبيقها كاملة لتطابق قاعدة البيانات التطبيق):
 
 1. `20261031101003_initalCreate`
+2. `20261116120000_AttendanceImportDeviceSupport`
+3. `20261117074343_TwoDeviceAndFlexibleAdvances`
+4. `20261117083643_PreparedMonthlyAdvanceRegister`
+5. `20261117090718_PayrollCycle26To25`
+6. `20261117123827_PayrollFinancialEvidenceGuard`
 
 ```bash
 dotnet ef migrations list --project src/HrPayroll.Infrastructure --startup-project src/HrPayroll.Web
 dotnet ef database update --project src/HrPayroll.Infrastructure --startup-project src/HrPayroll.Web
 ```
 
-`Database:ApplyMigrationsOnStartup=true` يطبّق الترحيلات الناقصة عند بدء التشغيل (لا يحذف بيانات ولا يُنشئ قاعدة جديدة بالقوة).
+أدوات EF تستخدم إعدادات اتصال التطبيق نفسها، دون تشغيل الموقع أو تهيئة الحسابات. يمكن استخدام `.\.tools\dotnet-ef.exe` بدلًا من `dotnet ef` إذا لم تكن الأداة مثبتة عالميًا. لإعدادات التطوير أضف `-- --environment Development` إلى أمر EF.
+
+`Database:ApplyMigrationsOnStartup=true` مفعّل في `appsettings.Development.json`: يطبّق الترحيلات الناقصة ويهيّئ البيانات الأساسية وحساب المسؤول في بيئة التطوير. الترحيل والتهيئة التلقائيان معطّلان في الإنتاج؛ طبّق الترحيلات يدويًا قبل تشغيله. ظهور `Invalid column name 'PeriodStart'` أو `PeriodEnd` أو `FinancialEvidenceHash` يعني أن قاعدة البيانات المتصل بها تحتاج الترحيلات الأخيرة.
 
 ## أوامر التشغيل على Windows (PowerShell)
 
 ```powershell
+powershell -ExecutionPolicy Bypass -File src/HrPayroll.Web/wwwroot/lib/restore-lib.ps1
 dotnet restore
 dotnet build HrPayroll.sln --configuration Release
 dotnet ef database update --project src/HrPayroll.Infrastructure --startup-project src/HrPayroll.Web
 dotnet run --project src/HrPayroll.Web
 ```
+
+أمر `restore-lib.ps1` مطلوب مرة بعد تنزيل المشروع لاستعادة Bootstrap وjQuery وملفات التحقق والخط العربي، مع التحقق من SHA256. هذه الملفات غير محفوظة في Git؛ غيابها يسبب أخطاء 404 وتظهر الصفحات دون تنسيق.
 
 للتحقق من الاتصال بقاعدة البيانات:
 
@@ -126,5 +136,5 @@ dotnet test tests/HrPayroll.Tests/HrPayroll.Tests.csproj --configuration Release
 - حماية CSRF على كل النماذج، والتحقق من نوع وحجم الملفات المرفوعة.
 - لا تُسجَّل كلمات المرور أو بيانات الاتصال في السجلات.
 
-تغطي الاختبارات (166 اختبارًا): حساب الحضور والورديات الليلية، الرواتب والإضافي والغياب،
+تغطي الاختبارات: حساب الحضور والورديات الليلية، الرواتب والإضافي والغياب،
 منع الخصم المزدوج، الإقفال وإعادة الفتح، الاستيراد والتصدير، التقارير، والأمان.

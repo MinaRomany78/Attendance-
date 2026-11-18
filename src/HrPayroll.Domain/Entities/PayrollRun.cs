@@ -5,6 +5,9 @@ namespace HrPayroll.Domain.Entities;
 /// <summary>كشف رواتب شهري (تشغيل واحد).</summary>
 public class PayrollRun : BaseEntity
 {
+    public string? FinancialEvidenceHash { get; set; }
+    public DateTime? PeriodStart { get; set; }
+    public DateTime? PeriodEnd { get; set; }
     public int Year { get; set; }
     public int Month { get; set; }
 

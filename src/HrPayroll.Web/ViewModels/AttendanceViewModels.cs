@@ -1,5 +1,6 @@
 using HrPayroll.Domain.Entities;
 using HrPayroll.Domain.Enums;
+using HrPayroll.Domain.Services;
 using HrPayroll.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
@@ -19,7 +20,8 @@ public class AttendanceIndexViewModel
     public int LateCount => Rows.Count(r => r.LateMinutes > 0);
     public int ReviewCount => Rows.Count(r => r.NeedsReview);
     public int TotalLateMinutes => Rows.Sum(r => r.LateMinutes);
-    public decimal TotalRawOvertimeHours => Math.Round(Rows.Sum(r => r.RawOvertimeMinutes) / 60m, 2);
+    public decimal TotalLateHours => HourDurationCalculator.ToHours(Rows.Sum(r => r.ActualLateMinutes));
+    public decimal TotalRawOvertimeHours => HourDurationCalculator.ToHours(Rows.Sum(r => r.RawOvertimeMinutes));
 
     public SelectList StatusList => new(
         Enum.GetValues<AttendanceStatus>().Select(s => new { Id = (int)s, Name = ExcelExportService.AttendanceText(s) }), "Id", "Name",
@@ -38,7 +40,11 @@ public class AttendanceCorrectionViewModel
     public DateTime? CheckIn { get; set; }
     public DateTime? CheckOut { get; set; }
     public AttendanceStatus? Status { get; set; }
+    public bool OverrideStatus { get; set; }
+    public bool UseAutomaticStatus { get; set; } = true;
     public int? ApprovedOvertimeMinutes { get; set; }
+    [System.ComponentModel.DataAnnotations.Range(typeof(decimal), "0", "744", ErrorMessage = "ساعات الإضافي يجب أن تكون غير سالبة.")]
+    public decimal? ApprovedOvertimeHours { get; set; }
     public bool Approve { get; set; } = true;
 
     public SelectList StatusList => new(

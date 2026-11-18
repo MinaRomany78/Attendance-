@@ -20,12 +20,16 @@ public class RawPunch : BaseEntity
 
     /// <summary>نوع الحركة/البصمة كما ورد (FP / I / O ...).</summary>
     public string? AttType { get; set; }
+    public string? NormalizedAttType { get; set; }
 
     /// <summary>الوقت الفعلي للبصمة (محوّل إلى توقيت الشركة المحلي).</summary>
     public DateTime PunchTime { get; set; }
 
     /// <summary>النص الأصلي لعمود الوقت كما ورد.</summary>
     public string? RawPunchTimeText { get; set; }
+
+    /// <summary>Original source columns for diagnostics, without assigning meaning to unknown metadata.</summary>
+    public string? OriginalFieldsJson { get; set; }
 
     /// <summary>رقم الصف الأصلي في الملف.</summary>
     public int? RowNumber { get; set; }

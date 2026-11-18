@@ -29,3 +29,7 @@ src/HrPayroll.Web/wwwroot/lib/jquery-validation-unobtrusive/
 # Covers both the web font and the PDF-embedded copy.
 src/HrPayroll.Web/wwwroot/fonts/Cairo.ttf
 src/HrPayroll.Infrastructure/Assets/Fonts/Cairo.ttf
+
+# Local EF CLI and regression outputs
+.tools/
+**/TestResults/

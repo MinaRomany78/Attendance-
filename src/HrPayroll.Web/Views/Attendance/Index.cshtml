@@ -97,9 +97,9 @@
     <div class="stat"><div class="label">📋 إجمالي السجلات</div><div class="value">@Model.Rows.Count</div></div>
     <div class="stat ok"><div class="label">✅ حضور فعلي</div><div class="value">@Model.PresentCount</div></div>
     <div class="stat bad"><div class="label">🚫 غياب</div><div class="value">@Model.AbsentCount</div></div>
-    <div class="stat warn"><div class="label">⏰ تأخير</div><div class="value">@Model.LateCount</div><div class="hint">إجمالي @Model.TotalLateMinutes دقيقة</div></div>
+    <div class="stat warn"><div class="label">⏰ تأخير</div><div class="value">@Model.LateCount</div><div class="hint">إجمالي التأخير الفعلي @Model.TotalLateHours.ToString("0.##") ساعة</div></div>
     <div class="stat bad"><div class="label">🔍 يحتاج مراجعة</div><div class="value">@Model.ReviewCount</div></div>
-    <div class="stat"><div class="label">⏱️ إضافي خام</div><div class="value">@Model.TotalRawOvertimeHours <small>ساعة</small></div></div>
+    <div class="stat"><div class="label">⏱️ إضافي خام</div><div class="value">@Model.TotalRawOvertimeHours.ToString("0.##") <small>ساعة</small></div></div>
 </div>
 
 <div class="card">
@@ -135,7 +135,7 @@
                 <tr>
                     <th>كود</th><th>الاسم</th><th>القسم</th><th>المسمى</th><th>التاريخ</th><th>الوردية</th>
                     <th>بداية</th><th>نهاية</th><th>الدخول</th><th>الخروج</th><th>ساعات العمل</th>
-                    <th>تأخير</th><th>انصراف مبكر</th><th>إضافي خام</th><th>إضافي معتمد</th>
+                    <th>تأخير فعلي (ساعة)</th><th>انصراف مبكر (ساعة)</th><th>نقص مجدول (ساعة)</th><th>نقص مقرب للعرض (ساعة)</th><th>إضافي خام (ساعة)</th><th>إضافي معتمد (ساعة)</th>
                     <th>الحالة</th><th>ملاحظات</th><th></th>
                 </tr>
                 </thead>
@@ -163,11 +163,13 @@
                         <td class="num">@r.ShiftEnd.ToString("HH:mm")</td>
                         <td class="num">@(r.CheckIn?.ToString("HH:mm") ?? "-")</td>
                         <td class="num">@(r.CheckOut?.ToString("HH:mm") ?? "-")</td>
-                        <td class="num">@r.WorkedHours</td>
-                        <td class="num">@r.LateMinutes</td>
-                        <td class="num">@r.EarlyLeaveMinutes</td>
-                        <td class="num">@r.RawOvertimeHours</td>
-                        <td class="num">@r.ApprovedOvertimeHours</td>
+                        <td class="num">@r.WorkedHours.ToString("0.##")</td>
+                        <td class="num" title="المقرب للعرض: @r.RoundedLateHours.ToString("0.##") ساعة">@r.ActualLateHours.ToString("0.##")</td>
+                        <td class="num" title="المقرب للعرض: @r.RoundedEarlyLeaveHours.ToString("0.##") ساعة">@r.EarlyLeaveHours.ToString("0.##")</td>
+                        <td class="num">@(r.ActualMissingHours?.ToString("0.##") ?? "غير محسوم")</td>
+                        <td class="num" title="معاينة تقريب فقط؛ الخصم يتبع السياسة المعتمدة بالكشف">@(r.RoundedMissingHours?.ToString("0.##") ?? "—")</td>
+                        <td class="num">@r.RawOvertimeHours.ToString("0.##")</td>
+                        <td class="num">@r.ApprovedOvertimeHours.ToString("0.##")</td>
                         <td><partial name="_StatusBadge" model="r.Status" /></td>
                         <td class="wrap">@(r.Notes ?? "-")</td>
                         <td><a class="btn btn-soft btn-sm" asp-action="Correct" asp-route-id="@r.DailyAttendanceId">تصحيح</a></td>

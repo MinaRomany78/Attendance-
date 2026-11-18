@@ -145,8 +145,8 @@
         </a>
         <a class="mod" asp-controller="SalaryAdvances" asp-action="Index">
             <span class="mod-ico" style="--mod:#0d9488"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 7.5V12l3 2" /></svg></span>
-            <span class="mod-title">سلفة يوم 15</span>
-            <span class="mod-desc">حساب واعتماد سلف منتصف الشهر</span>
+            <span class="mod-title">سلف الموظفين</span>
+            <span class="mod-desc">عرض الاستحقاق وصرف سلف الموظفين</span>
         </a>
         <a class="mod" asp-controller="Expenses" asp-action="Index">
             <span class="mod-ico" style="--mod:#7c3aed"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3.5h12v17H6z" /><path d="M9 8h6M9 11.5h6M9 15h4" /></svg></span>
@@ -189,6 +189,12 @@
     </a>
 </div>
 
+<div class="stat-grid" aria-label="ساعات الحضور الفعلية اليوم">
+    <div class="stat"><div class="label">ساعات العمل الفعلية</div><div class="value">@Model.WorkedHoursToday.ToString("0.##")</div></div>
+    <div class="stat warn"><div class="label">ساعات التأخير الفعلية</div><div class="value">@Model.LateHoursToday.ToString("0.##")</div></div>
+    <div class="stat warn"><div class="label">ساعات الانصراف المبكر</div><div class="value">@Model.EarlyDepartureHoursToday.ToString("0.##")</div></div>
+    <div class="stat"><div class="label">ساعات النقص المجدول المحسومة</div><div class="value">@Model.MissingScheduledHoursToday.ToString("0.##")</div><div class="hint">الأيام ذات البصمات المكتملة فقط؛ لا تُجمع مع التأخير والانصراف للخصم.</div></div>
+</div>
 <div class="next-step">
     <div class="next-step-body">
         <div class="next-step-k">الخطوة التالية</div>

@@ -16,8 +16,8 @@ public class OvertimeIndexViewModel
     public int TotalRawMinutes => Rows.Sum(r => r.RawMinutes);
     public int TotalApprovedMinutes => Rows.Sum(r => r.ApprovedMinutes);
     public int PendingCount => Rows.Count(r => r.RawMinutes > 0 && r.ApprovedMinutes == 0);
-    public decimal TotalRawHours => Math.Round(TotalRawMinutes / 60m, 2);
-    public decimal TotalApprovedHours => Math.Round(TotalApprovedMinutes / 60m, 2);
+    public decimal TotalRawHours => HourDurationCalculator.ToHours(TotalRawMinutes);
+    public decimal TotalApprovedHours => HourDurationCalculator.ToHours(TotalApprovedMinutes);
 
     /// <summary>
     /// قيمة الإضافي المعتمد بنفس معادلة الرواتب تمامًا (تحويل الدقائق إلى ساعات

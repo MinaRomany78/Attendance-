@@ -1,0 +1,110 @@
+/* Attendance import only; shares the application's light/dark design tokens. */
+.attendance-import { --import-strong: var(--brand-900); --import-link: var(--brand-700); --import-warning: #856013; --import-error: var(--danger); --import-focus: var(--info); }
+[data-theme="dark"] .attendance-import { --import-strong: #8fe3c9; --import-link: #6fd7bd; --import-warning: #e8b45a; --import-error: #ef93a3; --import-focus: #8fb8e8; }
+.attendance-import [hidden] { display: none !important; }
+.attendance-import h1 { font-size: clamp(20px, 2.2vw, 27px); }
+.attendance-import p { margin-block: 7px 12px; }
+.attendance-import .page-hero { padding: 24px; }
+.attendance-import .page-hero .sub { margin-bottom: 0; }
+.attendance-import .import-help { font-size: 12.5px; color: var(--ink-2); line-height: 1.8; }
+.import-steps { display: flex; padding: 0; margin: 20px 0; gap: 20px; list-style: none; flex-wrap: wrap; }
+.import-steps li { display: flex; gap: 8px; align-items: center; color: var(--ink-2); font-size: 13px; }
+.import-steps li span { display: grid; place-items: center; width: 28px; height: 28px; background: var(--surface); border: 1px solid var(--line); border-radius: 50%; font-weight: 700; }
+.import-steps .current { color: var(--import-strong); font-weight: 700; }
+.import-steps .current span { color: white; background: var(--brand); border-color: var(--brand); }
+.import-methods { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px; }
+.import-method { display: flex; align-items: center; gap: 10px; padding: 15px; text-align: start; font: inherit; cursor: pointer; border: 1.5px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); }
+.import-method.active { border-color: var(--import-link); background: var(--brand-50); box-shadow: inset 0 0 0 1px var(--import-link); }
+.import-method:hover { border-color: var(--import-link); }
+.import-method:focus-visible, .attendance-import button:focus-visible, .attendance-import a:focus-visible { outline: 3px solid var(--import-focus); outline-offset: 3px; }
+.import-method strong { display: block; font-size: 14px; }
+.import-method small { display: block; color: var(--ink-2); font-size: 12px; margin-top: 3px; }
+.import-method-icon { font-size: 25px; color: var(--import-link); }
+.import-recommended { font-size: 10px; padding: 2px 7px; border-radius: 20px; color: var(--import-strong); background: var(--surface); margin-inline-start: auto; white-space: nowrap; }
+.import-dropzone { position: relative; text-align: center; padding: 30px 22px 22px; border: 2px dashed var(--line); border-radius: var(--radius); background: var(--surface-2); transition: background .15s, border-color .15s; }
+.import-dropzone.has-file, .import-dropzone.is-dragging, .import-dropzone:focus-within { border-color: var(--import-link); background: var(--brand-50); }
+.import-dropzone.has-error { border-color: var(--danger); }
+.import-dropzone h2 { font-size: 19px; }
+.import-dropzone h3 { font-size: 17px; }
+.import-dropzone p { color: var(--ink-2); }
+.import-drop-icon { width: 58px; height: 58px; margin: 0 auto 12px; border: 1px solid var(--brand-100); background: var(--brand-50); color: var(--import-link); display: grid; place-items: center; font-size: 30px; border-radius: 17px; }
+.import-file-input { position: absolute; width: 1px !important; height: 1px; margin: -1px; padding: 0 !important; border: 0 !important; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.attendance-import .import-picker { display: inline-flex; cursor: pointer; margin: 4px 0 10px; }
+.import-selected { display: flex; justify-content: center; align-items: center; gap: 15px; flex-wrap: wrap; padding-top: 9px; }
+.import-selected strong { overflow-wrap: anywhere; unicode-bidi: plaintext; }
+.import-selected span { direction: ltr; color: var(--ink-2); font-size: 12px; }
+.attendance-import .import-feedback { min-height: 24px; margin-bottom: 6px; font-size: 12px; color: var(--ink-2); }
+.import-dropzone.has-error .import-feedback { color: var(--import-error); font-weight: 700; }
+.import-upload-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.import-notice { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; border-inline-start: 3px solid var(--brand); background: var(--brand-50); color: var(--ink); padding: 12px 15px; margin: 18px 0; border-radius: var(--radius-xs); font-size: 12.5px; }
+.import-notice strong { color: var(--import-strong); }
+.import-form-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 18px; }
+.import-progress { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: 15px; font-size: 13px; color: var(--ink-2); }
+.import-progress progress { accent-color: var(--brand); width: 160px; height: 9px; }
+.import-device-empty { text-align: center; margin: 5px auto 20px; max-width: 650px; }
+.import-device-empty .btn-row { justify-content: center; margin-top: 20px; }
+.import-status { display: inline-flex; gap: 5px; align-items: center; white-space: nowrap; border-radius: 20px; font-size: 11.5px; font-weight: 700; padding: 3px 9px; background: var(--line-2); color: var(--ink-2); }
+.import-status::before { content: ''; width: 6px; height: 6px; background: currentColor; border-radius: 50%; }
+.import-status.valid { background: var(--brand-50); color: var(--import-strong); }
+.import-status.review { background: var(--warn-50); color: var(--import-warning); }
+.import-status.invalid { background: var(--danger-50); color: var(--import-error); }
+.import-status.duplicate { background: var(--line-2); color: var(--ink-2); }
+.import-count { padding: 3px 11px; background: var(--line-2); border-radius: 20px; font-size: 12px; color: var(--ink-2); }
+.import-empty { padding: 32px 20px; text-align: center; color: var(--ink-2); }
+.import-empty > span { display: inline-block; color: var(--ink-3); font-size: 35px; margin-bottom: 9px; }
+.import-empty h3 { font-size: 15px; color: var(--ink); }
+.import-empty p { font-size: 13px; }
+.import-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+.import-metric { padding: 15px 17px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); box-shadow: var(--shadow-sm); border-block-start: 3px solid var(--info); }
+.import-metric span { display: block; font-size: 12px; color: var(--ink-2); }
+.import-metric strong { display: block; margin-top: 5px; font-size: 26px; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.import-metric.valid { border-block-start-color: var(--brand); }
+.import-metric.review { border-block-start-color: var(--warn); }
+.import-metric.invalid { border-block-start-color: var(--danger); }
+.import-metric.duplicate { border-block-start-color: var(--ink-3); }
+.import-file-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 15px; }
+.import-filters { display: grid; grid-template-columns: minmax(170px, 2fr) repeat(3, minmax(125px, 1fr)) auto; gap: 12px; align-items: end; padding: 15px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); margin-bottom: 10px; }
+.import-filters > div { min-width: 0; }
+.attendance-import .import-filters label { font-size: 12px; }
+.import-table-meta { display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin: 10px 0; }
+.import-preview-scroll { max-height: 660px; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.attendance-import .import-table th { font-size: 12px; white-space: nowrap; }
+.attendance-import .import-table td { font-size: 12.5px; vertical-align: middle; }
+.import-preview-scroll thead { position: sticky; top: 0; z-index: 1; }
+.import-cell-sub { display: block; font-size: 11px; color: var(--ink-2); margin-top: 3px; }
+.import-validation-message { min-width: 170px; max-width: 320px; }
+.import-original { font-size: 11px; margin-top: 5px; }
+.import-original summary { color: var(--import-link); cursor: pointer; }
+.import-original code { display: block; max-width: 270px; font-size: 11px; overflow-wrap: anywhere; white-space: pre-wrap; color: var(--ink-2); text-align: start; margin-top: 6px; }
+.import-mapping { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 14px; margin: 16px 0; background: var(--surface-2); }
+.import-mapping > summary { cursor: pointer; font-size: 14px; font-weight: 700; color: var(--ink); }
+.import-map-form { display: flex; align-items: center; gap: 12px; padding-block: 8px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.import-map-form > span { font-size: 12px; min-width: 120px; }
+.import-map-form select { flex: 1 1 230px; width: auto; }
+.import-checkbox { display: flex; align-items: center; gap: 10px; margin-block: 20px; }
+.import-checkbox input { width: 18px; height: 18px; accent-color: var(--brand); flex: 0 0 auto; }
+.import-cancel-form { display: inline-block; margin-top: 14px; }
+.import-hash { display: block; font-size: 11px; overflow-wrap: anywhere; direction: ltr; text-align: start; }
+@media (max-width: 1100px) {
+    .import-method { flex-wrap: wrap; }
+    .import-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .import-filters > :first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 650px) {
+    .attendance-import .page-hero { padding: 20px 16px; }
+    .import-methods, .import-upload-pair { grid-template-columns: 1fr; }
+    .import-method { flex-wrap: nowrap; }
+    .import-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .import-metric { padding: 12px; }
+    .import-metric strong { font-size: 23px; }
+    .import-steps { gap: 9px; }
+    .import-steps li { font-size: 11px; gap: 5px; }
+    .import-steps li span { width: 23px; height: 23px; }
+    .attendance-import .card-body { padding: 14px; }
+    .import-dropzone { padding: 24px 12px; }
+    .import-filters { padding: 12px; gap: 9px; }
+    .import-form-actions > .btn { width: 100%; }
+    .import-file-toolbar > .btn, .import-file-toolbar > form, .import-file-toolbar > form > .btn { width: 100%; }
+    .import-map-form > span, .import-map-form .btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { .import-dropzone { transition: none; } }

@@ -123,7 +123,8 @@ public enum ImportRowStatus
     Duplicate = 1,          // مكرر
     InvalidDateTime = 2,    // تاريخ/وقت غير صالح
     UnknownEmployee = 3,    // موظف غير مسجل
-    InvalidRow = 4          // صف غير صالح
+    InvalidRow = 4,         // صف غير صالح
+    NeedsReview = 5        // تعارض اتجاه أو ربط ملتبس؛ لا يُستورد قبل الحل
 }
 
 /// <summary>الوردية المستخدمة لحساب الرواتب (سياسة).</summary>

@@ -12,6 +12,80 @@ namespace HrPayroll.Tests;
 /// <summary>المتطلبات 6.3 و9 و10: معالجة الحضور، أيام الراحة، العطلات، والإجازات.</summary>
 public class AttendanceProcessingTests
 {
+    [Theory]
+    [InlineData(PayrollStatus.Approved)]
+    [InlineData(PayrollStatus.Locked)]
+    public async Task Reprocessing_Does_Not_Change_An_Approved_Or_Locked_Payroll_Period(PayrollStatus status)
+    {
+        using var db = new TestDb();
+        await using var ctx = await SeedAsync(db);
+        ctx.RawPunches.Add(AddPunch(ctx, TestDb.Monday.AddHours(7), type: "I"));
+        ctx.RawPunches.Add(AddPunch(ctx, TestDb.Monday.AddHours(15), type: "O"));
+        await ctx.SaveChangesAsync();
+        await Service(ctx).ProcessAsync(TestDb.Monday, TestDb.Monday);
+        var original = await ctx.DailyAttendances.SingleAsync();
+        var oldExit = original.CheckOutTime;
+        var eventCount = await ctx.AttendanceEvents.CountAsync();
+        ctx.PayrollRuns.Add(new PayrollRun { Year = TestDb.Monday.Year, Month = TestDb.Monday.Month, Status = status });
+        ctx.RawPunches.Add(AddPunch(ctx, TestDb.Monday.AddHours(16), type: "O"));
+        await ctx.SaveChangesAsync();
+        var result = await Service(ctx).ProcessAsync(TestDb.Monday, TestDb.Monday);
+        Assert.Equal(oldExit, original.CheckOutTime);
+        Assert.Equal(eventCount, await ctx.AttendanceEvents.CountAsync());
+        Assert.Contains(result.Warnings, w => w.Contains("المقفلة"));
+    }
+
+    [Fact]
+    public async Task Reprocessing_An_Empty_Day_Preserves_Approved_Manual_Times()
+    {
+        using var db = new TestDb();
+        await using var ctx = await SeedAsync(db);
+        foreach (var date in new[] { TestDb.Monday, TestDb.Monday.AddDays(2) })
+        {
+            ctx.RawPunches.Add(AddPunch(ctx, date.AddHours(7), type: "I"));
+            ctx.RawPunches.Add(AddPunch(ctx, date.AddHours(15), type: "O"));
+        }
+        await ctx.SaveChangesAsync();
+        await Service(ctx).ProcessAsync(TestDb.Monday, TestDb.Monday.AddDays(2));
+        var emptyDay = TestDb.Monday.AddDays(1);
+        var daily = await ctx.DailyAttendances.SingleAsync(d => d.WorkDate == emptyDay);
+        var correction = new AttendanceCorrectionService(ctx, new AuditService(ctx));
+        await correction.CorrectAsync(new AttendanceCorrectionService.CorrectionRequest
+        {
+            DailyAttendanceId = daily.Id, CheckIn = emptyDay.AddHours(7), CheckOut = emptyDay.AddHours(15),
+            Status = AttendanceStatus.Present, Reason = "Sanitized supervisor correction"
+        }, "tester", "u1");
+        var correctionCount = await ctx.AttendanceCorrections.CountAsync();
+        await Service(ctx).ProcessAsync(emptyDay, emptyDay);
+        Assert.Equal(emptyDay.AddHours(7), daily.CheckInTime);
+        Assert.Equal(emptyDay.AddHours(15), daily.CheckOutTime);
+        Assert.Equal(AttendanceStatus.Present, daily.Status);
+        Assert.True(daily.IsManualOverride);
+        Assert.Equal(correctionCount, await ctx.AttendanceCorrections.CountAsync());
+    }
+    [Fact]
+    public async Task Empty_Night_Shift_Day_Is_Not_Mistaken_For_Its_Own_Continuation()
+    {
+        using var db = new TestDb();
+        await using var ctx = await SeedAsync(db, TestDb.NightShift());
+        var emp = await ctx.Employees.SingleAsync();
+        emp.ShiftId = 2;
+        ctx.RawPunches.Add(AddPunch(ctx, TestDb.Monday.AddHours(23), type: "I"));
+        ctx.RawPunches.Add(AddPunch(ctx, TestDb.Monday.AddDays(1).AddHours(7), type: "O"));
+        ctx.RawPunches.Add(AddPunch(ctx, TestDb.Monday.AddDays(3).AddHours(23), type: "I"));
+        await ctx.SaveChangesAsync();
+        await Service(ctx).ProcessAsync(TestDb.Monday, TestDb.Monday.AddDays(3));
+        // A scheduled Tuesday night is a new work shift; Monday's Tuesday-morning checkout
+        // must not conceal the absence of Tuesday's own entry/exit.
+        Assert.Equal(AttendanceStatus.NeedsReview,
+            (await ctx.DailyAttendances.SingleAsync(d => d.WorkDate == TestDb.Monday.AddDays(1))).Status);
+        Assert.Equal(AttendanceStatus.NeedsReview,
+            (await ctx.DailyAttendances.SingleAsync(d => d.WorkDate == TestDb.Monday.AddDays(2))).Status);
+        var night = await ctx.DailyAttendances.SingleAsync(d => d.WorkDate == TestDb.Monday);
+        Assert.Equal(TestDb.Monday.AddHours(23), night.CheckInTime);
+        Assert.Equal(TestDb.Monday.AddDays(1).AddHours(7), night.CheckOutTime);
+        Assert.False(night.HasIncompletePunches);
+    }
     private static AttendanceProcessingService Service(AppDbContext ctx)
         => new(ctx, new SettingsService(ctx), NullLogger<AttendanceProcessingService>.Instance);
 
@@ -223,7 +297,7 @@ public class AttendanceProcessingTests
         Assert.Equal(TestDb.Monday.AddHours(15).AddMinutes(10), updated.CheckOutTime);
         Assert.True(updated.IsManualOverride);
 
-        var correction = await ctx.AttendanceCorrections.SingleAsync();
+        var correction = await ctx.AttendanceCorrections.SingleAsync(c => c.FieldName == "CheckOutTime");
         Assert.Equal("CheckOutTime", correction.FieldName);
         Assert.Null(correction.OldValue);
         Assert.Contains("15:10", correction.NewValue);
@@ -244,6 +318,7 @@ public class AttendanceProcessingTests
 
         var daily = await ctx.DailyAttendances.SingleAsync(d => d.WorkDate == TestDb.Monday);
         var rawCount = await ctx.RawPunches.CountAsync();
+        var eventIds = await ctx.AttendanceEvents.Select(e => e.Id).OrderBy(id => id).ToListAsync();
 
         var corrections = new AttendanceCorrectionService(ctx, new AuditService(ctx));
         await corrections.CorrectAsync(new AttendanceCorrectionService.CorrectionRequest
@@ -253,6 +328,7 @@ public class AttendanceProcessingTests
             Reason = "تأكيد وقت الخروج الفعلي بعد مراجعة المشرف"
         }, "tester", "u1");
 
+        var correctionCountBeforeReprocessing = await ctx.AttendanceCorrections.CountAsync();
         // إعادة معالجة نفس اليوم: يجب ألا تُستبدل القيمة المصحّحة بالبصمة الخام
         await Service(ctx).ProcessAsync(TestDb.Monday, TestDb.Monday);
 
@@ -261,7 +337,8 @@ public class AttendanceProcessingTests
         Assert.True(updated.IsManualOverride);
         Assert.Contains("تصحيح يدوي", updated.NeedsReviewReason!);
         Assert.Equal(rawCount, await ctx.RawPunches.CountAsync());              // البصمات الخام محفوظة
-        Assert.Equal(1, await ctx.AttendanceCorrections.CountAsync());          // سجل التصحيح محفوظ
+        Assert.Equal(correctionCountBeforeReprocessing, await ctx.AttendanceCorrections.CountAsync());          // سجل التصحيح محفوظ
+        Assert.Equal(eventIds, await ctx.AttendanceEvents.Select(e => e.Id).OrderBy(id => id).ToListAsync());
     }
 
     [Fact]

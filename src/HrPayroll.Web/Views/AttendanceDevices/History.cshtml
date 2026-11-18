@@ -1,0 +1,9 @@
+﻿@model List<HrPayroll.Domain.Entities.DeviceSyncLog>
+@{ ViewData["Title"] = "سجل مزامنة الجهاز"; }
+<h1>سجل مزامنة الجهاز</h1>
+<a asp-action="Index">العودة للأجهزة</a>
+@foreach(var log in Model){
+<article class="card"><p>@log.CreatedAt.ToString("yyyy-MM-dd HH:mm 'UTC'") · @(log.Successful ? "تم التنزيل" : "فشل") · @log.Error</p>
+<p>تنزيل @log.Downloaded · محفوظ @log.Inserted · مكرر @log.Duplicates · غير صالح @log.Invalid · غير مرتبط @log.Unmatched · مراجعة @log.Review</p>
+@if(log.ReviewRecordsJson != null && log.ReviewRecordsJson != "[]"){<details><summary>السجلات الأصلية المحتاجة للمراجعة</summary><pre dir="ltr" style="white-space:pre-wrap">@log.ReviewRecordsJson</pre></details>}
+</article>}

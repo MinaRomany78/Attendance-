@@ -9,12 +9,16 @@ namespace HrPayroll.Infrastructure.Services;
 
 public static class SettingKeys
 {
+    public const string DisplayHourRoundingMode = "Attendance.DisplayHourRoundingMode";
+    public const string DisplayHourRoundingIncrement = "Attendance.DisplayHourRoundingIncrement";
     // ===== سياسة الأجر =====
     public const string WorkDaysPerMonth = "Payroll.WorkDaysPerMonth";
     public const string WorkHoursPerDay = "Payroll.WorkHoursPerDay";
     public const string DefaultOvertimeMultiplier = "Payroll.DefaultOvertimeMultiplier";
     public const string LateDeductionEnabled = "Payroll.LateDeductionEnabled";
+    public const string EarlyLeaveDeductionEnabled = "Payroll.EarlyLeaveDeductionEnabled";
     public const string AbsenceDeductionEnabled = "Payroll.AbsenceDeductionEnabled";
+    public const string AbsenceDeductionMaxDays = "Payroll.AbsenceDeductionMaxDays";
     public const string UnpaidLeaveDeductionEnabled = "Payroll.UnpaidLeaveDeductionEnabled";
     public const string OvertimeRoundingStepMinutes = "Payroll.OvertimeRoundingStepMinutes";
     public const string RoundOvertimeDown = "Payroll.RoundOvertimeDown";
@@ -81,11 +85,18 @@ public class SettingsService
 
         return new AttendancePolicy
         {
-            WorkDaysPerMonth = Math.Max(1, GetInt(SettingKeys.WorkDaysPerMonth, 30)),
+            HourRounding = new HourRoundingPolicy
+            {
+                Mode = all.TryGetValue(SettingKeys.DisplayHourRoundingMode, out var mode) && Enum.TryParse<HourRoundingMode>(mode, true, out var parsedMode) && Enum.IsDefined(parsedMode) ? parsedMode : HourRoundingMode.Nearest,
+                IncrementHours = GetDec(SettingKeys.DisplayHourRoundingIncrement, 1m) is 0.25m or 0.5m or 1m ? GetDec(SettingKeys.DisplayHourRoundingIncrement, 1m) : 1m
+            },
+            WorkDaysPerMonth = 30,
             WorkHoursPerDay = Math.Max(1, GetInt(SettingKeys.WorkHoursPerDay, 8)),
             DefaultOvertimeMultiplier = GetDec(SettingKeys.DefaultOvertimeMultiplier, 1m),
             LateDeductionEnabled = GetBool(SettingKeys.LateDeductionEnabled, true),
+            EarlyLeaveDeductionEnabled = GetBool(SettingKeys.EarlyLeaveDeductionEnabled, true),
             AbsenceDeductionEnabled = GetBool(SettingKeys.AbsenceDeductionEnabled, true),
+            AbsenceDeductionMaxDays = Math.Max(0, GetInt(SettingKeys.AbsenceDeductionMaxDays, 0)),
             UnpaidLeaveDeductionEnabled = GetBool(SettingKeys.UnpaidLeaveDeductionEnabled, true),
             OvertimeRoundingStepMinutes = Math.Max(1, GetInt(SettingKeys.OvertimeRoundingStepMinutes, 1)),
             RoundOvertimeDown = GetBool(SettingKeys.RoundOvertimeDown, true),

@@ -1,5 +1,7 @@
+using HrPayroll.Domain.Models;
 using HrPayroll.Domain.Entities;
 using HrPayroll.Domain.Enums;
+using HrPayroll.Domain.Services;
 using HrPayroll.Infrastructure.Persistence;
 using HrPayroll.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -23,7 +25,8 @@ public class DeductionsController : Controller
 
     public async Task<IActionResult> Index(int? year, int? month, CancellationToken ct)
     {
-        var y = year ?? DateTime.Today.Year;
+        var current = await CompanyPayrollClock.CurrentAsync(_db,ct);
+        var y = year ?? current.Year;
         var q = _db.Deductions.Include(d => d.Employee).AsNoTracking().Where(d => d.Year == y);
         if (month.HasValue) q = q.Where(d => d.Month == month.Value);
         ViewBag.Year = y; ViewBag.Month = month;
@@ -34,15 +37,23 @@ public class DeductionsController : Controller
     public async Task<IActionResult> Create(CancellationToken ct)
     {
         await FillAsync(ct);
-        return View("Form", new Deduction { DeductionDate = DateTime.Today, Month = DateTime.Today.Month, Year = DateTime.Today.Year });
+        var today = await CompanyPayrollClock.TodayAsync(_db,ct); var period = PayrollPeriod.FromDate(today);
+        return View("Form", new Deduction { DeductionDate = today, Month = period.Month, Year = period.Year });
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(Deduction model, CancellationToken ct)
     {
+        if (model.DeductionDate.Year is < 2 or > 9998) ModelState.AddModelError(nameof(model.DeductionDate),"التاريخ غير صالح.");
+        else { model.Year = PayrollPeriod.FromDate(model.DeductionDate).Year; model.Month = PayrollPeriod.FromDate(model.DeductionDate).Month; }
         Validate(model);
+        if (!await _db.Employees.AnyAsync(e => e.Id == model.EmployeeId, ct)) ModelState.AddModelError(nameof(model.EmployeeId), "الموظف غير موجود");
+        if (await FinancialPeriodGuard.IsProtectedAsync(_db, model.Year, model.Month, ct))
+            ModelState.AddModelError(string.Empty, "الفترة مرتبطة بكشف رواتب معتمد أو مقفل.");
         if (!ModelState.IsValid) { await FillAsync(ct); return View("Form", model); }
+        model.Id = 0; model.PayrollItemId = null; model.PayrollItem = null; model.Employee = null;
+        model.Status = ApprovalStatus.Pending; model.ApprovedAt = null; model.ApprovedBy = null;
         model.CreatedBy = User.Identity?.Name;
         _db.Deductions.Add(model);
         await _db.SaveChangesAsync(ct);
@@ -57,7 +68,7 @@ public class DeductionsController : Controller
     {
         var d = await _db.Deductions.FindAsync(new object?[] { id }, ct);
         if (d is null) return NotFound();
-        if (d.PayrollItemId.HasValue)
+        if (d.PayrollItemId.HasValue || await FinancialPeriodGuard.IsProtectedAsync(_db, d.Year, d.Month, ct))
         {
             TempData["Error"] = "لا يمكن تعديل خصم تم تطبيقه في كشف رواتب";
             return RedirectToAction(nameof(Index));
@@ -76,7 +87,8 @@ public class DeductionsController : Controller
 
         var d = await _db.Deductions.FindAsync(new object?[] { id }, ct);
         if (d is null) return NotFound();
-        if (d.PayrollItemId.HasValue)
+        if (d.PayrollItemId.HasValue || await FinancialPeriodGuard.IsProtectedAsync(_db, d.Year, d.Month, ct)
+            || await FinancialPeriodGuard.IsProtectedAsync(_db, model.Year, model.Month, ct))
         {
             TempData["Error"] = "لا يمكن تعديل خصم مطبّق في كشف رواتب";
             return RedirectToAction(nameof(Index));
@@ -100,6 +112,11 @@ public class DeductionsController : Controller
     {
         var d = await _db.Deductions.FindAsync(new object?[] { id }, ct);
         if (d is null) return NotFound();
+        if (d.PayrollItemId.HasValue || await FinancialPeriodGuard.IsProtectedAsync(_db, d.Year, d.Month, ct))
+        {
+            TempData["Error"] = "لا يمكن تغيير اعتماد خصم تمت تسويته أو ينتمي لكشف رواتب معتمد أو مقفل.";
+            return RedirectToAction(nameof(Index));
+        }
         d.Status = d.Status == ApprovalStatus.Approved ? ApprovalStatus.Pending : ApprovalStatus.Approved;
         d.ApprovedBy = User.Identity?.Name;
         d.ApprovedAt = DateTime.UtcNow;
@@ -116,8 +133,10 @@ public class DeductionsController : Controller
 
     private void Validate(Deduction model)
     {
+        model.Amount = PayrollCalculator.Round2(model.Amount);
         if (model.Amount <= 0) ModelState.AddModelError(nameof(Deduction.Amount), "المبلغ يجب أن يكون أكبر من صفر");
         if (string.IsNullOrWhiteSpace(model.Reason)) ModelState.AddModelError(nameof(Deduction.Reason), "السبب مطلوب");
         if (model.Month is < 1 or > 12) ModelState.AddModelError(nameof(Deduction.Month), "شهر غير صالح");
+        if (model.Year is < 1 or > 9999) ModelState.AddModelError(nameof(Deduction.Year), "سنة غير صالحة");
     }
 }

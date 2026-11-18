@@ -1,3 +1,5 @@
+using HrPayroll.Domain.Services;
+using System.Data;
 using HrPayroll.Domain.Entities;
 using HrPayroll.Domain.Enums;
 using HrPayroll.Infrastructure.Persistence;
@@ -48,14 +50,7 @@ public class LeaveService
             : new List<DateTime>();
         var holidaySet = holidays.ToHashSet();
 
-        var count = 0m;
-        for (var d = start; d <= end; d = d.AddDays(1))
-        {
-            if (restDays.Contains(d.DayOfWeek)) continue;
-            if (holidaySet.Contains(d)) continue;
-            count += 1m;
-        }
-        return count;
+        return WorkingDayCalculator.Count(start,end,restDays,holidaySet);
     }
 
     /// <summary>يتحقق من عدم تداخل الطلب الجديد مع طلب إجازة آخر لنفس الموظف.</summary>
@@ -87,6 +82,12 @@ public class LeaveService
         if (leave.EndDate.Date < leave.StartDate.Date)
             throw new InvalidOperationException("تاريخ نهاية الإجازة قبل تاريخ البداية.");
 
+        if (!await _db.Employees.AnyAsync(e => e.Id == leave.EmployeeId, ct))
+            throw new InvalidOperationException("الموظف غير موجود.");
+        if (!Enum.IsDefined(leave.LeaveType)) throw new InvalidOperationException("نوع الإجازة غير صالح.");
+        await FinancialPeriodGuard.EnsureEditableAsync(_db, leave.StartDate, leave.EndDate, ct);
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
         var overlaps = await FindOverlapsAsync(leave.EmployeeId, leave.StartDate, leave.EndDate, null, ct);
         if (overlaps.Count > 0 && !allowOverlap)
             throw new InvalidOperationException(
@@ -97,6 +98,12 @@ public class LeaveService
         leave.EndDate = leave.EndDate.Date;
         leave.DaysCount = (leave.EndDate - leave.StartDate).Days + 1;
         leave.WorkingDays = await CountWorkingDaysAsync(leave.StartDate, leave.EndDate, ct: ct);
+        leave.Status = ApprovalStatus.Pending;
+        leave.ApprovedBy = null;
+        leave.ApprovedAt = null;
+        leave.PayrollItemId = null;
+        leave.PayrollItem = null;
+        leave.Employee = null;
         leave.CreatedBy = user;
         leave.CreatedAt = DateTime.UtcNow;
 
@@ -104,43 +111,55 @@ public class LeaveService
         await _audit.LogAsync("إضافة طلب إجازة", nameof(LeaveRequest), null, null,
             $"{leave.LeaveType} {leave.StartDate:yyyy-MM-dd}..{leave.EndDate:yyyy-MM-dd} ({leave.WorkingDays} يوم عمل)", user, ct: ct);
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
         return leave;
     }
 
     /// <summary>يعتمد الطلب ويخصم رصيد الإجازة السنوية مرة واحدة فقط.</summary>
     public async Task ApproveAsync(int leaveId, string? user, CancellationToken ct = default)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var leave = await _db.LeaveRequests.FirstOrDefaultAsync(l => l.Id == leaveId, ct)
                     ?? throw new InvalidOperationException("طلب الإجازة غير موجود");
 
         if (leave.Status == ApprovalStatus.Approved) return;
 
+        if (leave.PayrollItemId.HasValue) throw new InvalidOperationException("الإجازة مرتبطة بكشف رواتب؛ أعد فتح الكشف أولاً.");
+        await FinancialPeriodGuard.EnsureEditableAsync(_db, leave.StartDate, leave.EndDate, ct);
+        var overlaps = await FindOverlapsAsync(leave.EmployeeId, leave.StartDate, leave.EndDate, leave.Id, ct);
+        if (overlaps.Any(o => o.Status == ApprovalStatus.Approved))
+            throw new InvalidOperationException("يوجد طلب إجازة معتمد متداخل لنفس الموظف.");
+        var employee = await _db.Employees.FirstOrDefaultAsync(e => e.Id == leave.EmployeeId, ct)
+            ?? throw new InvalidOperationException("الموظف غير موجود.");
+        if (leave.LeaveType == LeaveType.Annual && employee.AnnualLeaveBalance < leave.WorkingDays)
+            throw new InvalidOperationException("رصيد الإجازة السنوية غير كافٍ. لا توجد سياسة معتمدة تسمح برصيد سالب.");
+
         leave.Status = ApprovalStatus.Approved;
         leave.ApprovedBy = user;
         leave.ApprovedAt = DateTime.UtcNow;
-        leave.IsPaid = leave.LeaveType != LeaveType.Unpaid && leave.LeaveType != LeaveType.UnexcusedAbsence;
+        leave.IsPaid = leave.IsPaid && leave.LeaveType != LeaveType.Unpaid && leave.LeaveType != LeaveType.UnexcusedAbsence;
 
         // خصم الرصيد السنوي مرة واحدة فقط (منع الخصم المتكرر عند إعادة الاعتماد)
         if (leave.LeaveType == LeaveType.Annual)
         {
-            var employee = await _db.Employees.FirstOrDefaultAsync(e => e.Id == leave.EmployeeId, ct);
-            if (employee is not null)
-            {
-                employee.AnnualLeaveBalance -= leave.WorkingDays;
-                employee.UpdatedAt = DateTime.UtcNow;
-                employee.UpdatedBy = user;
-            }
+            employee.AnnualLeaveBalance -= leave.WorkingDays;
+            employee.UpdatedAt = DateTime.UtcNow;
+            employee.UpdatedBy = user;
         }
 
         await _audit.LogAsync("اعتماد إجازة", nameof(LeaveRequest), leave.Id.ToString(), "Pending", "Approved", user, ct: ct);
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
     }
 
     public async Task RejectAsync(int leaveId, string? user, CancellationToken ct = default)
     {
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var leave = await _db.LeaveRequests.FirstOrDefaultAsync(l => l.Id == leaveId, ct)
                     ?? throw new InvalidOperationException("طلب الإجازة غير موجود");
         if (leave.Status == ApprovalStatus.Rejected) return;
+        if (leave.PayrollItemId.HasValue) throw new InvalidOperationException("الإجازة مرتبطة بكشف رواتب؛ أعد فتح الكشف أولاً.");
+        await FinancialPeriodGuard.EnsureEditableAsync(_db, leave.StartDate, leave.EndDate, ct);
 
         var wasApproved = leave.Status == ApprovalStatus.Approved;
         leave.Status = ApprovalStatus.Rejected;
@@ -162,6 +181,7 @@ public class LeaveService
         await _audit.LogAsync("رفض إجازة", nameof(LeaveRequest), leave.Id.ToString(),
             wasApproved ? "Approved" : "Pending", "Rejected", user, ct: ct);
         await _db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
     }
 
     /// <summary>
@@ -174,44 +194,47 @@ public class LeaveService
     {
         var dates = absenceDates.Select(d => d.Date).Distinct().OrderBy(d => d).ToList();
         if (dates.Count == 0) throw new InvalidOperationException("لم يتم تحديد أي يوم غياب.");
-
+        if (!Enum.IsDefined(leaveType)) throw new InvalidOperationException("نوع الإجازة غير صالح.");
+        await using var tx = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await FinancialPeriodGuard.EnsureEditableAsync(_db, dates.First(), dates.Last(), ct);
         var employee = await _db.Employees.FirstOrDefaultAsync(e => e.Id == employeeId, ct)
                        ?? throw new InvalidOperationException("الموظف غير موجود");
-
         var restDays = await _settings.GetWeeklyRestDaysAsync(ct);
-        dates = dates.Where(d => !restDays.Contains(d.DayOfWeek)).ToList();
-        if (dates.Count == 0) throw new InvalidOperationException("كل الأيام المحددة أيام راحة أسبوعية.");
-
-        var leave = new LeaveRequest
-        {
-            EmployeeId = employeeId,
-            StartDate = dates.First(),
-            EndDate = dates.Last(),
-            LeaveType = leaveType,
-            Status = ApprovalStatus.Approved,
-            IsPaid = leaveType is not (LeaveType.Unpaid or LeaveType.UnexcusedAbsence),
-            Reason = reason,
-            ApprovedBy = user,
-            ApprovedAt = DateTime.UtcNow,
-            DaysCount = (dates.Last() - dates.First()).Days + 1,
-            WorkingDays = dates.Count,
-            CreatedFromAbsence = true,
-            CreatedBy = user,
-            CreatedAt = DateTime.UtcNow
-        };
-
-        _db.LeaveRequests.Add(leave);
-        await _db.SaveChangesAsync(ct);
-
-        // تحويل أيام الحضور الغائبة إلى إجازة معتمدة
+        var holidays = await _db.PublicHolidays.Where(h => h.IsActive && dates.Contains(h.HolidayDate))
+            .Select(h => h.HolidayDate).ToListAsync(ct);
+        var nonWorking = holidays.Select(d => d.Date).ToHashSet();
+        dates = dates.Where(d => !restDays.Contains(d.DayOfWeek) && !nonWorking.Contains(d)).ToList();
+        if (dates.Count == 0) throw new InvalidOperationException("كل الأيام المحددة أيام راحة أو عطلات رسمية.");
         var daily = await _db.DailyAttendances
-            .Where(d => d.EmployeeId == employeeId && dates.Contains(d.WorkDate))
-            .ToListAsync(ct);
+            .Where(d => d.EmployeeId == employeeId && dates.Contains(d.WorkDate)).ToListAsync(ct);
+        if (daily.Count != dates.Count || daily.Any(d => d.Status is not (AttendanceStatus.Absent or AttendanceStatus.UnexcusedAbsence)))
+            throw new InvalidOperationException("يمكن تحويل أيام الغياب المؤكدة فقط؛ لا يمكن تحويل يوم حضور أو يوم لم تُستورد بياناته.");
+        if (leaveType == LeaveType.Annual && employee.AnnualLeaveBalance < dates.Count)
+            throw new InvalidOperationException("رصيد الإجازة السنوية غير كافٍ لتحويل الأيام المحددة.");
+        foreach (var date in dates)
+            if ((await FindOverlapsAsync(employeeId, date, date, ct: ct)).Count > 0)
+                throw new InvalidOperationException($"يوجد طلب إجازة متداخل في {date:yyyy-MM-dd}.");
 
+        // Separate intervals preserve selected gaps: reprocessing must not grant leave to unselected dates.
+        var groups = new List<List<DateTime>>();
+        foreach (var date in dates)
+        {
+            if (groups.Count == 0 || groups[^1][^1].AddDays(1) != date) groups.Add(new List<DateTime>());
+            groups[^1].Add(date);
+        }
+        var leaves = groups.Select(group => new LeaveRequest
+        {
+            EmployeeId = employeeId, StartDate = group[0], EndDate = group[^1], LeaveType = leaveType,
+            Status = ApprovalStatus.Approved, IsPaid = leaveType is not (LeaveType.Unpaid or LeaveType.UnexcusedAbsence),
+            Reason = reason, ApprovedBy = user, ApprovedAt = DateTime.UtcNow, DaysCount = group.Count,
+            WorkingDays = group.Count, CreatedFromAbsence = true, CreatedBy = user, CreatedAt = DateTime.UtcNow
+        }).ToList();
+        _db.LeaveRequests.AddRange(leaves);
         foreach (var d in daily)
         {
             var previous = d.Status.ToString();
-            d.LeaveRequestId = leave.Id;
+            var leaveForDate = leaves.Single(l => d.WorkDate >= l.StartDate && d.WorkDate <= l.EndDate);
+            d.LeaveRequest = leaveForDate;
             d.Status = leaveType switch
             {
                 LeaveType.Unpaid or LeaveType.UnexcusedAbsence => AttendanceStatus.UnpaidLeave,
@@ -241,15 +264,16 @@ public class LeaveService
 
         if (leaveType == LeaveType.Annual)
         {
-            employee.AnnualLeaveBalance -= leave.WorkingDays;
+            employee.AnnualLeaveBalance -= dates.Count;
             employee.UpdatedAt = DateTime.UtcNow;
             employee.UpdatedBy = user;
         }
 
-        await _audit.LogAsync("تحويل غياب إلى إجازة", nameof(LeaveRequest), leave.Id.ToString(), null,
+        await _audit.LogAsync("تحويل غياب إلى إجازة", nameof(LeaveRequest), null, null,
             $"{leaveType}: {dates.Count} يوم ({string.Join(", ", dates.Select(x => x.ToString("yyyy-MM-dd")))})", user, ct: ct);
         await _db.SaveChangesAsync(ct);
-        return leave;
+        await tx.CommitAsync(ct);
+        return leaves[0];
     }
 
     /// <summary>أيام الغياب الحالية لموظف داخل فترة (لشاشة التحويل).</summary>
