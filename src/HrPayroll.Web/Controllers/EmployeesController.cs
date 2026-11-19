@@ -1,3 +1,4 @@
+using HrPayroll.Domain.Models;
 using HrPayroll.Domain.Entities;
 using HrPayroll.Domain.Enums;
 using HrPayroll.Infrastructure.Import;
@@ -350,8 +351,9 @@ public class EmployeesController : Controller
         var emp = await _db.Employees.Include(e => e.Shift).FirstOrDefaultAsync(e => e.Id == id, ct);
         if (emp is null) return NotFound();
 
-        var first = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-        var last = first.AddMonths(1).AddDays(-1);
+        var period = await CompanyPayrollClock.CurrentAsync(_db,ct);
+        var first = period.Start;
+        var last = period.End;
 
         ViewBag.ThisMonth = await _db.DailyAttendances.AsNoTracking()
             .Where(d => d.EmployeeId == id && d.WorkDate >= first && d.WorkDate <= last)

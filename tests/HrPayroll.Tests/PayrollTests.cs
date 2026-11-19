@@ -16,7 +16,7 @@ namespace HrPayroll.Tests;
 /// </summary>
 public class PayrollTests
 {
-    private static readonly DateTime PeriodStart = new(2024, 10, 1);
+    private static readonly DateTime PeriodStart = PayrollPeriod.ForMonth(2024,10).Start;
 
     private static PayrollService Service(AppDbContext ctx)
         => new(ctx, new SettingsService(ctx), new AuditService(ctx), NullLogger<PayrollService>.Instance);
@@ -147,7 +147,8 @@ public class PayrollTests
         var result = await Service(ctx).GenerateAsync(2024, 10, "tester", "u1");
         var item = await ctx.PayrollItems.SingleAsync(i => i.PayrollRunId == result.PayrollRunId);
 
-        Assert.Equal(4, item.PaidRestDays);
+        // The 26 September–25 October cycle includes five Fridays, including the one without an inserted row.
+        Assert.Equal(5, item.PaidRestDays);
         Assert.Equal(9000m, item.GrossEarnings);  // لم تُضف قيمة أيام الراحة مرة أخرى
         Assert.Equal(9000m, item.NetSalary);
     }
@@ -201,7 +202,7 @@ public class PayrollTests
         // واعتماد على مستوى الفترة لنفس الساعات (يجب ألا تُضاف مرة أخرى)
         ctx.OvertimeApprovals.Add(new OvertimeApproval
         {
-            EmployeeId = 1, PeriodStart = PeriodStart, PeriodEnd = PeriodStart.AddMonths(1).AddDays(-1),
+            EmployeeId = 1, PeriodStart = PeriodStart, PeriodEnd = PayrollPeriod.ForMonth(2024,10).End,
             CalculatedHours = 10m, ApprovedHours = 10m, OvertimeMultiplier = 1m, Status = ApprovalStatus.Approved
         });
         await ctx.SaveChangesAsync();
@@ -304,9 +305,11 @@ public class PayrollTests
 
         AddAttendanceDays(ctx, 0, 0, null, 20);
         AddAttendanceDays(ctx, 0, 0, AttendanceStatus.PaidLeave, 3);
+        var leaveDates = ctx.DailyAttendances.Local.Where(d => d.Status == AttendanceStatus.PaidLeave)
+            .Select(d => d.WorkDate).OrderBy(d => d).ToArray();
         ctx.LeaveRequests.Add(new LeaveRequest
         {
-            EmployeeId = 1, LeaveType = LeaveType.Annual, StartDate = PeriodStart, EndDate = PeriodStart.AddDays(2),
+            EmployeeId = 1, LeaveType = LeaveType.Annual, StartDate = leaveDates.First(), EndDate = leaveDates.Last(),
             Status = ApprovalStatus.Approved, IsPaid = true, DaysCount = 3, WorkingDays = 3
         });
         await ctx.SaveChangesAsync();
@@ -413,6 +416,7 @@ public class PayrollTests
 
         AddAttendanceDays(ctx, 0, 0, null, 20);
         await ctx.SaveChangesAsync();
+        await PayrollTestAttendance.CompleteAsync(ctx, PayrollPeriod.ForMonth(2024, 10));
 
         var service = Service(ctx);
         var run = await service.GenerateAsync(2024, 10, "tester", "u1");
@@ -443,6 +447,7 @@ public class PayrollTests
         using var _ = db;
         AddAttendanceDays(ctx, 0, 0, null, 20);
         await ctx.SaveChangesAsync();
+        await PayrollTestAttendance.CompleteAsync(ctx, PayrollPeriod.ForMonth(2024, 10));
 
         var service = Service(ctx);
         var run = await service.GenerateAsync(2024, 10, "tester", "u1");
@@ -473,6 +478,7 @@ public class PayrollTests
 
         AddAttendanceDays(ctx, 0, 0, null, 20);
         await ctx.SaveChangesAsync();
+        await PayrollTestAttendance.CompleteAsync(ctx, PayrollPeriod.ForMonth(2024, 10));
 
         var payroll = Service(ctx);
         var run = await payroll.GenerateAsync(2024, 10, "tester", "u1");
@@ -544,11 +550,11 @@ public class PayrollTests
     // ===================== 21) تطابق قيمة الإضافي بين شاشة الاعتماد وكشف الراتب =====================
 
     [Theory] // 21 + 10 + 11
-    [InlineData(40, 37.50, 25.13)]
+    [InlineData(40, 37.50, 25.00)]
     [InlineData(60, 37.50, 37.50)]
-    [InlineData(100, 37.50, 62.63)]
+    [InlineData(100, 37.50, 62.50)]
     [InlineData(120, 37.50, 75.00)]
-    [InlineData(1, 37.50, 0.75)]
+    [InlineData(1, 37.50, 0.63)]
     [InlineData(3000, 37.50, 1875.00)]
     public void Overtime_Minutes_Are_Converted_To_Hours_With_One_Rounding_Rule(
         int minutes, decimal hourlyRate, decimal expected)

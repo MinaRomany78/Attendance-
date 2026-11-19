@@ -1,153 +1,32 @@
-@model List<SalaryAdvance>
-@using HrPayroll.Domain.Entities
-@{
-    ViewData["Title"] = "سلفة يوم 15";
-    ViewData["Subtitle"] = "حساب الاستحقاق حتى يوم 15 ثم مراجعة واعتماد ودفع وتسوية مع الراتب";
-    int y = (int)(ViewBag.Year ?? DateTime.Today.Year);
-    int m = (int)(ViewBag.Month ?? DateTime.Today.Month);
-    string StatusText(SalaryAdvanceStatus s) => s switch
-    {
-        SalaryAdvanceStatus.Calculated => "محسوبة",
-        SalaryAdvanceStatus.UnderReview => "قيد المراجعة",
-        SalaryAdvanceStatus.Approved => "معتمدة",
-        SalaryAdvanceStatus.Paid => "مدفوعة",
-        SalaryAdvanceStatus.Settled => "مُسوَّاة",
-        SalaryAdvanceStatus.Cancelled => "ملغاة",
-        _ => s.ToString()
-    };
-    string cls(SalaryAdvanceStatus s) => s switch
-    {
-        SalaryAdvanceStatus.Approved => "ok",
-        SalaryAdvanceStatus.Paid => "ok",
-        SalaryAdvanceStatus.Settled => "muted",
-        SalaryAdvanceStatus.Cancelled => "bad",
-        _ => "warn"
-    };
+﻿@model HrPayroll.Web.ViewModels.SalaryAdvancesPage
+@using System.Globalization
+@{ ViewData["Title"]="سلف الموظفين"; var total=Model.History.Where(a=>a.Status==SalaryAdvanceStatus.Registered).Sum(a=>a.RegisteredAmount??0m); }
+<div class="page-header"><div><span class="eyebrow">الموظفون / دورة الرواتب</span><h1>سلف الموظفين</h1><p>اختر القسم، أدخل مبلغ السلفة، ثم احفظ. المبالغ بالجنيه المصري.</p></div><span class="period-pill" dir="ltr">@Model.PeriodText</span></div>
+<div class="section-note"><div><strong>سيتم خصم مبلغ السلفة المحفوظ من مرتب دورة الرواتب الحالية.</strong><p>الحفظ هو الإجراء النهائي لتسجيل الخصم، ولا يُثبت تسليم مبلغ نقدي. المكتسب حتى @Model.Date.ToString("yyyy-MM-dd") للمعلومات؛ يمكنك حفظ مبلغ أعلى منه.</p></div></div>
+<form method="get" class="card filter-bar no-print" data-loading-text="جاري تجهيز كشف الموظفين...">
+<label>القسم<select name="department" onchange="this.form.requestSubmit()"><option value="">اختر القسم لعرض الموظفين</option>@foreach(var d in Model.Departments){<option value="@d" selected="@(d==Model.Department)">@d</option>}</select></label>
+<label class="filter-search">بحث عن موظف<input name="search" type="search" value="@Model.Search" placeholder="اسم الموظف أو الكود" /></label>
+<label>شهر إغلاق الدورة<input name="month" type="number" value="@Model.Month" min="1" max="12" /></label><label>السنة<input name="year" type="number" value="@Model.Year" min="2" max="9998" /></label><button class="btn btn-primary" type="submit">عرض الموظفين</button>
+</form>
+<div class="metric-grid"><div class="metric"><div class="k">الموظفون المعروضون</div><div class="v">@Model.Balances.Count</div><div class="meta">@(Model.Department??"اختر قسماً للبدء")</div></div><div class="metric"><div class="k">المكتسب حتى اليوم</div><div class="v">@Model.Balances.Sum(b=>b.Earned).ToString("N2")<span class="unit">ج.م</span></div><div class="meta">وفق الحضور والإجازات المثبتة</div></div><div class="metric emphasis"><div class="k">السلف المسجلة للخصم في الدورة</div><div class="v" id="registeredTotal">@total.ToString("N2")<span class="unit">ج.م</span></div><div class="meta">للموظفين في الكشف المعروض</div></div></div>
+@if(Model.IsReadOnly){<div class="alert alert-warning">هذه الدورة للعرض فقط. لا يمكن تعديل السلف في دورة تاريخية أو كشف مرتبات مغلق.</div>}
+<section class="card"><div class="card-head"><div><h2>كشف سلف @(Model.Department??"الموظفين")</h2><div class="sub">مبلغ واحد مسجل لكل موظف في الدورة. تعديل المبلغ يستبدل القيمة السابقة.</div></div><div class="btn-row no-print"><a class="btn btn-ghost btn-sm" asp-action="ExportExcel" asp-route-year="@Model.Year" asp-route-month="@Model.Month" asp-route-department="@Model.Department">تصدير Excel</a><button type="button" class="btn btn-ghost btn-sm" data-print>طباعة</button></div></div>
+<form asp-action="Save" method="post" id="advanceRegister" data-read-only="@Model.IsReadOnly.ToString().ToLowerInvariant()"><input name="Year" type="hidden" value="@Model.Year" /><input name="Month" type="hidden" value="@Model.Month" />
+@if(Model.Balances.Count==0){<div class="empty-state"><h3>@(string.IsNullOrWhiteSpace(Model.Department)?"ابدأ باختيار القسم":"لا يوجد موظفون مطابقون")</h3><p>سيظهر الموظفون مع أيام الحضور والمكتسب حتى اليوم. عدّل السلفة واحفظها مباشرة من صف الموظف.</p></div>}else{
+<div class="table-wrap"><table class="data advance-table"><thead><tr><th>الموظف</th><th>الكود</th><th>القسم</th><th>أيام العمل الفعلية</th><th>المكتسب حتى اليوم</th><th>المتاح من المكتسب</th><th>السلفة المسجلة</th><th>مبلغ السلفة</th><th>الإجراء</th></tr></thead><tbody>
+@for(var index=0;index<Model.Balances.Count;index++){
+var b=Model.Balances[index]; var register=Model.History.SingleOrDefault(a=>a.EmployeeId==b.Employee.Id&&a.CycleKey==SalaryAdvanceService.MonthlyCycle); var amount=register?.Status==SalaryAdvanceStatus.Registered?register.RegisteredAmount??0m:0m; var immutable=Model.IsReadOnly||register?.PaidAmount>0||register?.Status is SalaryAdvanceStatus.Paid or SalaryAdvanceStatus.Settled;
+<tr data-advance-row data-employee-id="@b.Employee.Id" data-available="@b.RegistrationCapacity.ToString(CultureInfo.InvariantCulture)" data-saved-amount="@amount.ToString(CultureInfo.InvariantCulture)">
+<td class="employee-cell"><strong>@b.Employee.FullName</strong>@if(b.NeedsReview){<small class="inline-warning">بيانات الحضور غير مكتملة</small>}</td><td class="num">@b.Employee.EmployeeCode</td><td>@(b.Employee.Department??"—")</td><td class="num">@b.WorkedDays</td><td class="cell-money" title="@b.Explanation">@b.Earned.ToString("N2")<small>حتى @Model.Date.ToString("yyyy-MM-dd")</small></td><td class="cell-money" data-available-display>@b.Available.ToString("N2")@if(b.PreviousPaid>0){<small>مدفوعات سابقة: @b.PreviousPaid.ToString("N2")</small>}</td><td class="cell-money" data-existing-amount>@amount.ToString("N2")</td>
+<td><input name="Payments[@index].EmployeeId" type="hidden" value="@b.Employee.Id" /><input name="Payments[@index].Id" type="hidden" value="@(register?.Id??0)" data-record-id /><input name="Payments[@index].Revision" type="hidden" value="@(register?.Revision??0)" data-revision /><div class="amount-editor"><input name="Payments[@index].Amount" type="number" min="0" step="0.01" value="@amount.ToString("0.00",CultureInfo.InvariantCulture)" data-amount disabled="@immutable" inputmode="decimal" aria-label="مبلغ سلفة @b.Employee.FullName" /></div><small data-warning class="inline-warning" role="status">@(amount>b.RegistrationCapacity?"المبلغ أكبر من المتاح؛ يمكنك حفظه.":"")</small></td><td><button class="btn btn-primary btn-sm inline-save" type="submit" data-save-row disabled="@immutable">حفظ</button><span data-row-status class="save-state" role="status" aria-live="polite">@(immutable?"للعرض فقط":"")</span></td></tr>
 }
-<partial name="_BackHome" />
-<div class="page-hero">
-    <div class="page-hero-ico" aria-hidden="true">◐</div>
-    <div class="page-hero-body">
-        <h2>سلفة منتصف الشهر (يوم 15)</h2>
-        <div class="sub">المستحق الفعلي من بداية الشهر حتى تاريخ الاستحقاق — إجمالي المقترح: @(((decimal)(ViewBag.TotalProposed ?? 0m))).ToString("N2") EGP — المعتمد: @(((decimal)(ViewBag.TotalApproved ?? 0m))).ToString("N2") EGP — المدفوع: @(((decimal)(ViewBag.TotalPaid ?? 0m))).ToString("N2") EGP</div>
-    </div>
-</div>
-<div class="card">
-    <div class="card-head">
-        <h2>حساب سلفة جديدة</h2>
-    </div>
-    <div class="card-body">
-        <form method="post" asp-action="Calculate" class="filters">
-            <input type="hidden" name="year" value="@y" />
-            <input type="hidden" name="month" value="@m" />
-            <div class="field">
-                <label>الموظف</label>
-                <select name="employeeId" asp-items="ViewBag.Employees" required>
-                    <option value="">— اختر الموظف —</option>
-                </select>
-            </div>
-            <div class="field">
-                <label>تاريخ الاستحقاق</label>
-                <input type="date" name="cutoff" value="@(new DateTime(y, m, Math.Min(15, DateTime.DaysInMonth(y, m))).ToString("yyyy-MM-dd"))" required />
-            </div>
-            <div class="field actions">
-                <button type="submit" class="btn btn-primary">احسب السلفة</button>
-                <a class="btn btn-ghost" asp-action="ExportExcel" asp-route-year="@y" asp-route-month="@m">تصدير Excel</a>
-            </div>
-        </form>
-        <form method="get" asp-action="Index" class="filters" style="margin-top:12px">
-            <div class="field">
-                <label>السنة</label>
-                <input type="number" name="year" value="@y" />
-            </div>
-            <div class="field">
-                <label>الشهر</label>
-                <input type="number" name="month" value="@m" min="1" max="12" />
-            </div>
-            <div class="field actions">
-                <button type="submit" class="btn btn-soft">عرض الفترة</button>
-            </div>
-        </form>
-    </div>
-</div>
-<div class="card">
-    <div class="card-head"><h3>جدول المراجعة (@Model.Count)</h3></div>
-    @if (Model.Count == 0)
-    {
-        ViewData["message"] = "لا توجد سلف لهذه الفترة";
-        ViewData["hint"] = "احسب سلفة من الحضور الفعلي أعلاه، ثم راجعها واعتمدها قبل الدفع.";
-        ViewData["icon"] = "◐";
-        <partial name="_Empty" />
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table class="data">
-                <thead>
-                <tr>
-                    <th>الموظف</th><th>القسم</th><th>الاستحقاق</th><th>الراتب</th>
-                    <th>حضور</th><th>تأخير (د)</th><th>غياب</th>
-                    <th>المستحق (EGP)</th><th>المقترح (EGP)</th><th>المعتمد (EGP)</th>
-                    <th>المدفوع</th><th>الحالة</th><th>سبب التعديل</th><th></th>
-                </tr>
-                </thead>
-                <tbody>
-                @foreach (var a in Model)
-                {
-                    <tr>
-                        <td>@a.Employee?.FullName <span class="hint">@a.Employee?.EmployeeCode</span></td>
-                        <td>@(a.Employee?.Department ?? "—")</td>
-                        <td class="num">@a.CutoffDate.ToString("yyyy-MM-dd")</td>
-                        <td class="num money">@a.BasicSalary.ToString("N2")</td>
-                        <td class="num">@a.AttendanceDays يوم (@a.WorkingHours.ToString("N1") س)</td>
-                        <td class="num">@a.LateMinutes <span class="hint">(@a.LateDeduction.ToString("N2"))</span></td>
-                        <td class="num">@a.AbsenceDays <span class="hint">(@a.AbsenceDeduction.ToString("N2"))</span></td>
-                        <td class="num money">@a.EarnedAmount.ToString("N2")</td>
-                        <td class="num money">@a.ProposedAmount.ToString("N2")</td>
-                        <td class="num money">@a.ApprovedAmount.ToString("N2")</td>
-                        <td class="num money">@a.PaidAmount.ToString("N2")</td>
-                        <td><span class="badge @cls(a.Status)">@StatusText(a.Status)</span></td>
-                        <td class="wrap">@(string.IsNullOrWhiteSpace(a.AdjustmentReason) ? "—" : a.AdjustmentReason)</td>
-                        <td class="btn-row">
-                            @if (a.Status is SalaryAdvanceStatus.Calculated or SalaryAdvanceStatus.UnderReview)
-                            {
-                                <form method="post" asp-action="Review" asp-route-id="@a.Id" class="d-inline">
-                                    <input type="hidden" name="year" value="@y" />
-                                    <input type="hidden" name="month" value="@m" />
-                                    <input type="number" name="approvedAmount" value="@a.ApprovedAmount" step="0.01" min="0" style="width:110px" title="المبلغ المعتمد" />
-                                    <input type="text" name="reason" placeholder="سبب التعديل (مطلوب عند الاختلاف)" style="width:170px" />
-                                    <button type="submit" class="btn btn-soft btn-sm">مراجعة</button>
-                                </form>
-                                <form method="post" asp-action="Approve" asp-route-id="@a.Id" class="d-inline">
-                                    <input type="hidden" name="year" value="@y" />
-                                    <input type="hidden" name="month" value="@m" />
-                                    <button type="submit" class="btn btn-ghost btn-sm" data-confirm="اعتماد السلفة بالمبلغ المعتمد؟">اعتماد</button>
-                                </form>
-                            }
-                            @if (a.Status == SalaryAdvanceStatus.Approved)
-                            {
-                                <form method="post" asp-action="MarkPaid" asp-route-id="@a.Id" class="d-inline">
-                                    <input type="hidden" name="year" value="@y" />
-                                    <input type="hidden" name="month" value="@m" />
-                                    <input type="number" name="paidAmount" value="@a.ApprovedAmount" step="0.01" min="0" max="@a.ApprovedAmount" style="width:110px" title="المبلغ المدفوع" />
-                                    <button type="submit" class="btn btn-ghost btn-sm" data-confirm="تسجيل دفع السلفة؟">تسجيل الدفع</button>
-                                </form>
-                            }
-                            @if (a.Status is not (SalaryAdvanceStatus.Paid or SalaryAdvanceStatus.Settled or SalaryAdvanceStatus.Cancelled))
-                            {
-                                <form method="post" asp-action="Cancel" asp-route-id="@a.Id" class="d-inline">
-                                    <input type="hidden" name="year" value="@y" />
-                                    <input type="hidden" name="month" value="@m" />
-                                    <input type="text" name="reason" placeholder="سبب الإلغاء" required style="width:130px" />
-                                    <button type="submit" class="btn btn-ghost btn-sm" data-confirm="إلغاء هذه السلفة؟">إلغاء</button>
-                                </form>
-                            }
-                            @if (a.PayrollItemId.HasValue) { <span class="hint">مُسوَّاة في كشف</span> }
-                        </td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        </div>
-    }
-</div>
+</tbody></table></div>}
+<div id="advanceStatus" class="register-status" role="status" aria-live="polite"></div></form><div class="card-body muted" style="border-top:1px solid var(--line-2);font-size:11px">لإزالة سلفة غير مسوّاة، امسح المبلغ أو أدخل صفراً ثم احفظ. يُحفظ أثر التعديل في السجل.</div></section>
+<details class="card history-disclosure"><summary>السجل المحفوظ للدورة · @Model.History.Count سجل</summary><div class="table-wrap"><table class="data"><thead><tr><th>التاريخ</th><th>الموظف</th><th>المبلغ المسجل</th><th>النقدي المثبت سابقاً</th><th>الحالة</th><th>سجّل بواسطة</th><th class="no-print">ربط سجل تاريخي</th></tr></thead><tbody>
+@foreach(var a in Model.History){<tr><td class="num">@((a.UpdatedAt??a.CreatedAt).ToString("yyyy-MM-dd HH:mm"))</td><td>@a.Employee?.FullName</td><td class="money">@((a.RegisteredAmount??a.PreparedAmount??a.ApprovedAmount).ToString("N2"))</td><td class="money">@a.PaidAmount.ToString("N2")</td><td><span class="badge @(a.Status==SalaryAdvanceStatus.Registered?"ok":"muted")">@(a.Status switch{SalaryAdvanceStatus.Registered=>"مسجلة للخصم",SalaryAdvanceStatus.Paid=>"مدفوعات سابقة",SalaryAdvanceStatus.Settled=>"مسواة في كشف سابق",SalaryAdvanceStatus.Cancelled=>"ملغاة",_=>"سجل سابق غير مسجل للخصم"})</span></td><td>@(a.UpdatedBy??a.CreatedBy)</td><td class="no-print">@if(User.IsInRole(AppRoles.Admin) && a.Status==SalaryAdvanceStatus.Paid && a.PaidAmount>0 && a.PayrollItemId==null && (!a.PeriodStart.HasValue && !a.PeriodEnd.HasValue)){<form method="post" asp-action="MapLegacyPeriod" class="legacy-cycle-form" data-loading-text="جاري ربط السجل بالدورة..."><input name="id" type="hidden" value="@a.Id" /><label>سنة الدورة<input name="year" type="number" min="2" max="9998" value="@Model.Year" required /></label><label>شهر إغلاق الدورة<input name="month" type="number" min="1" max="12" value="@Model.Month" required /></label><label>سبب الربط<input name="reason" placeholder="سبب موثق لربط السلفة القديمة" minlength="10" maxlength="1000" required /></label><button class="btn btn-soft btn-sm" type="submit">ربط بدورة 26–25</button></form>}else{<span class="muted">—</span>}</td></tr>}
+</tbody></table></div></details>
+@section Scripts{<script src="~/js/salary-advances.js" asp-append-version="true"></script>}
+
+
+
+

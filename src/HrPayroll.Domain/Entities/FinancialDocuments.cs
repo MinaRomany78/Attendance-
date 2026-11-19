@@ -66,12 +66,20 @@ public enum ExpenseSettlementMode
 }
 
 /// <summary>
-/// سلفة منتصف الشهر (سلفة يوم 15): تُحسب من الاستحقاق الفعلي
-/// من بداية الشهر حتى تاريخ الاستحقاق، ثم تُراجع وتُعتمد وتُدفع،
-/// وتُسوَّى لاحقًا مع كشف راتب نفس الشهر.
+/// سلفة موظف لدورة الرواتب. التسجيل للخصم مستقل عن معاملات الصرف النقدي التاريخية.
 /// </summary>
 public class SalaryAdvance : BaseEntity
 {
+    public DateTime? PeriodStart { get; set; }
+    public DateTime? PeriodEnd { get; set; }
+    public Guid? PaymentRequestId { get; set; }
+    public string? CycleKey { get; set; }
+    public decimal? PreparedAmount { get; set; }
+    /// <summary>المبلغ المسجل للخصم مباشرة عند الحفظ؛ لا يثبت صرفاً نقدياً.</summary>
+    public decimal? RegisteredAmount { get; set; }
+    public DateTime? PreparedAt { get; set; }
+    public string? PreparedBy { get; set; }
+    public long Revision { get; set; }
     public int EmployeeId { get; set; }
     public Employee? Employee { get; set; }
 
@@ -134,7 +142,10 @@ public enum SalaryAdvanceStatus
     Approved = 2,
     Paid = 3,
     Settled = 4,
-    Cancelled = 5
+    Cancelled = 5,
+    Prepared = 6,
+    /// <summary>مسجلة للخصم من دورة الرواتب، دون إثبات دفع نقدي.</summary>
+    Registered = 7
 }
 
 /// <summary>

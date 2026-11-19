@@ -1,3 +1,4 @@
+using HrPayroll.Domain.Models;
 using HrPayroll.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,8 +14,8 @@ public class DashboardController : Controller
 
     public async Task<IActionResult> Index(int? year, int? month, DateTime? date, CancellationToken ct)
     {
-        var y = year ?? DateTime.Today.Year;
-        var m = month ?? DateTime.Today.Month;
+        var current = date.HasValue ? PayrollPeriod.FromDate(date.Value) : await _dashboard.CurrentPeriodAsync(ct);
+        var y = year ?? current.Year; var m = month ?? current.Month;
         var data = await _dashboard.GetAsync(y, m, date, ct);
         return View(data);
     }

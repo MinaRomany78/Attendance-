@@ -17,7 +17,7 @@
 }
 <div class="card">
     <div class="card-head">
-        <div><h2>تقرير الإضافي</h2><div class="sub">@f.PeriodText — @Model.Count صف — إجمالي المعتمد @Math.Round(Model.Sum(r => r.ApprovedMinutes) / 60m, 2) ساعة</div></div>
+        <div><h2>تقرير الإضافي</h2><div class="sub">@f.PeriodText — @Model.Count صف — إجمالي المعتمد @HourDurationCalculator.DisplayHours(Model.Sum(r => r.ApprovedMinutes)) ساعة</div></div>
         <div class="btn-row">
             <a class="btn btn-soft btn-sm" asp-action="ExportOvertimeExcel" asp-all-route-data="q">Excel</a>
             <a class="btn btn-ghost btn-sm" asp-action="Index">رجوع</a>
@@ -54,7 +54,7 @@
     {
         <div class="table-wrap">
             <table class="data">
-                <thead><tr><th>كود</th><th>الاسم</th><th>القسم</th><th>التاريخ</th><th>الوردية</th><th>نهاية الوردية</th><th>الخروج</th><th>خام (دقيقة)</th><th>معتمد (دقيقة)</th><th>ساعة</th></tr></thead>
+                <thead><tr><th>كود</th><th>الاسم</th><th>القسم</th><th>التاريخ</th><th>الوردية</th><th>نهاية الوردية</th><th>الخروج</th><th>خام (ساعة)</th><th>معتمد (ساعة)</th></tr></thead>
                 <tbody>
                 @foreach (var r in Model)
                 {
@@ -66,9 +66,8 @@
                         <td>@(r.ShiftName ?? "-")</td>
                         <td class="num">@r.ShiftEnd.ToString("HH:mm")</td>
                         <td class="num">@(r.CheckOut?.ToString("HH:mm") ?? "-")</td>
-                        <td class="num">@r.RawMinutes</td>
-                        <td class="num">@r.ApprovedMinutes</td>
-                        <td class="num">@r.DecimalHours</td>
+                        <td class="num">@r.RawHours.ToString("0.##")</td>
+                        <td class="num">@r.ApprovedHours.ToString("0.##")</td>
                     </tr>
                 }
                 </tbody>

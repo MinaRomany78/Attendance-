@@ -51,7 +51,7 @@ public static class PunchClassifier
         var relevant = punches
             .Where(p => p.PunchTime >= window.Start.AddMinutes(-policy.EarlyArrivalToleranceMinutes)
                         && p.PunchTime <= window.End.AddMinutes(policy.OvertimeToleranceMinutes))
-            .GroupBy(p => p.PunchTime)
+            .GroupBy(p => (p.PunchTime, Direction: ParseExplicitDirection(p.AttType)))
             .Select(g => g.OrderBy(x => x.Id).First())
             .OrderBy(p => p.PunchTime)
             .ThenBy(p => p.Id)
@@ -74,10 +74,10 @@ public static class PunchClassifier
             .Where(x => x.Dir != PunchDirection.Unknown)
             .ToList();
 
-        if (withExplicit.Any(x => x.Dir == PunchDirection.In) && withExplicit.Any(x => x.Dir == PunchDirection.Out))
+        if (withExplicit.Count > 0)
         {
             return BuildFromExplicit(
-                withExplicit.Select(x => (x.Punch, x.Dir)).ToList(),
+                relevant.Select(x => (x, ParseExplicitDirection(x.AttType))).ToList(),
                 window, workDate, policy, entryGrace, exitGrace);
         }
 
@@ -96,6 +96,13 @@ public static class PunchClassifier
 
         foreach (var (punch, dir) in items.OrderBy(x => x.Punch.PunchTime))
         {
+            if (dir == PunchDirection.Unknown)
+            {
+                events.Add(new ClassifiedEvent(punch, AttendanceEventType.Unknown, ClassificationStatus.NeedsReview,
+                    ClassificationSource.ExplicitDeviceType, 0m, "اتجاه غير محدد ضمن حركات ذات اتجاه صريح؛ يلزم المراجعة"));
+                review = true;
+                continue;
+            }
             var type = dir == PunchDirection.In ? AttendanceEventType.Entry : AttendanceEventType.Exit;
             var inWindow = punch.PunchTime >= window.Start.AddMinutes(-policy.EarlyArrivalToleranceMinutes)
                            && punch.PunchTime <= window.End.AddMinutes(policy.OvertimeToleranceMinutes);
@@ -115,6 +122,7 @@ public static class PunchClassifier
             }
         }
 
+        review |= entry is null || exit is null || exit <= entry;
         return Finalize(workDate, window, policy, events, entry, exit, entryId, exitId, review,
             "تصنيف حسب نوع الحركة الصريح من الجهاز", entryGrace, exitGrace);
     }
@@ -218,10 +226,13 @@ public static class PunchClassifier
         List<ClassifiedEvent> events, DateTime? entry, DateTime? exit,
         int? entryId, int? exitId, bool review, string? reason, int entryGrace, int exitGrace)
     {
-        var late = AttendanceCalculator.CalculateLateMinutes(window, entryGrace, entry);
-        var early = AttendanceCalculator.CalculateEarlyLeaveMinutes(window, exit);
-        var overtime = AttendanceCalculator.CalculateOvertimeMinutes(
-            window, exitGrace, exit, policy.MinimumOvertimeMinutes);
+        var facts = AttendanceCalculator.CalculateDay(window, entry, exit, entryGrace, exitGrace,
+            policy.MinimumOvertimeMinutes, policy.GracePeriodMode);
+        var late = facts.LateMinutes;
+        var early = facts.EarlyLeaveMinutes;
+        var overtime = facts.RawOvertimeMinutes;
+        review |= facts.NeedsReview;
+        if (entry is null || exit is null || exit <= entry) overtime = 0;
 
         AttendanceStatus status;
         if (entry is not null && exit is not null)

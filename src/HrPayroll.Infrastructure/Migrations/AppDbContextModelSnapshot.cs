@@ -213,6 +213,78 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.ToTable("AttendanceCorrections", (string)null);
                 });
 
+            modelBuilder.Entity("HrPayroll.Domain.Entities.AttendanceDevice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ConnectionStatus")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Identifier")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("IpAddress")
+                        .IsRequired()
+                        .HasMaxLength(45)
+                        .HasColumnType("nvarchar(45)");
+
+                    b.Property<int>("LastDownloadedCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastSuccessfulSyncUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("LastSyncError")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ProtectedCommunicationKey")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TcpPort")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AttendanceDevices", (string)null);
+                });
+
             modelBuilder.Entity("HrPayroll.Domain.Entities.AttendanceEvent", b =>
                 {
                     b.Property<int>("Id")
@@ -574,6 +646,105 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.ToTable("Departments", (string)null);
                 });
 
+            modelBuilder.Entity("HrPayroll.Domain.Entities.DeviceEmployeeMapping", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttendanceDeviceId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("BiometricCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("EmployeeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("AttendanceDeviceId", "BiometricCode")
+                        .IsUnique();
+
+                    b.ToTable("DeviceEmployeeMapping");
+                });
+
+            modelBuilder.Entity("HrPayroll.Domain.Entities.DeviceSyncLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AttendanceDeviceId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Downloaded")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Duplicates")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<int>("Inserted")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Invalid")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Review")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReviewRecordsJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("Successful")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("Unmatched")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AttendanceDeviceId", "CreatedAt");
+
+                    b.ToTable("DeviceSyncLog");
+                });
+
             modelBuilder.Entity("HrPayroll.Domain.Entities.Employee", b =>
                 {
                     b.Property<int>("Id")
@@ -879,6 +1050,9 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("ReviewRows")
+                        .HasColumnType("int");
 
                     b.Property<int>("SuccessRows")
                         .HasColumnType("int");
@@ -1334,6 +1508,9 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.Property<int>("AttendanceDays")
                         .HasColumnType("int");
 
+                    b.Property<int?>("AttendanceMissingDays")
+                        .HasColumnType("int");
+
                     b.Property<decimal>("BasicSalary")
                         .HasColumnType("decimal(18,2)");
 
@@ -1342,6 +1519,9 @@ namespace HrPayroll.Infrastructure.Migrations
 
                     b.Property<string>("CalculationDetails")
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<decimal?>("ContractBasicSalary")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -1362,10 +1542,34 @@ namespace HrPayroll.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("nvarchar(150)");
 
+                    b.Property<decimal?>("EarlyLeaveDeduction")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("EarlyLeaveMinutes")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("EarnedBasicSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("EarnedDeductions")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("EarnedGrossSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("EarnedNetSalary")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("EarningsAsOf")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("EmployeeCode")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal?>("EmployeeExpenseRecoveries")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<int>("EmployeeId")
                         .HasColumnType("int");
@@ -1374,6 +1578,10 @@ namespace HrPayroll.Infrastructure.Migrations
                         .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("FinancialReviewReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<decimal>("GrossEarnings")
                         .HasColumnType("decimal(18,2)");
@@ -1403,6 +1611,12 @@ namespace HrPayroll.Infrastructure.Migrations
 
                     b.Property<int>("LateMinutes")
                         .HasColumnType("int");
+
+                    b.Property<decimal?>("LegacyLoanDeductions")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("LoanInstallments")
+                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("LoansTotal")
                         .HasColumnType("decimal(18,2)");
@@ -1442,6 +1656,9 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.Property<int>("PaidRestDays")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("PayableBasicDays")
+                        .HasColumnType("decimal(6,2)");
+
                     b.Property<int>("PayrollRunId")
                         .HasColumnType("int");
 
@@ -1451,10 +1668,19 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.Property<int>("RawOvertimeMinutes")
                         .HasColumnType("int");
 
+                    b.Property<decimal?>("SalaryAdvancesPaid")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("ShortageDeduction")
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
 
                     b.Property<decimal>("TotalDeductions")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("UncoveredDeductions")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("UnpaidLeaveDays")
@@ -1510,6 +1736,10 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.Property<string>("CreatedBy")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<string>("FinancialEvidenceHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
                     b.Property<DateTime?>("LockedAt")
                         .HasColumnType("datetime2");
 
@@ -1523,6 +1753,12 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("PeriodEnd")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PeriodStart")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("ReopenReason")
                         .HasMaxLength(1000)
@@ -1662,6 +1898,12 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.Property<bool>("IsValid")
                         .HasColumnType("bit");
 
+                    b.Property<string>("NormalizedAttType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("OriginalFieldsJson")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("PunchTime")
                         .HasColumnType("datetime2");
 
@@ -1746,6 +1988,10 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.Property<DateTime>("CutoffDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("CycleKey")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
                     b.Property<decimal>("EarnedAmount")
                         .HasColumnType("decimal(18,2)");
 
@@ -1781,11 +2027,37 @@ namespace HrPayroll.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<Guid?>("PaymentRequestId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int?>("PayrollItemId")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("PeriodEnd")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("PeriodStart")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal?>("PreparedAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime?>("PreparedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("PreparedBy")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<decimal>("ProposedAmount")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("RegisteredAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<long>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
@@ -1804,12 +2076,19 @@ namespace HrPayroll.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("PaymentRequestId")
+                        .IsUnique()
+                        .HasFilter("[PaymentRequestId] IS NOT NULL");
+
                     b.HasIndex("PayrollItemId");
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("EmployeeId", "Year", "Month")
-                        .IsUnique();
+                    b.HasIndex("EmployeeId", "Year", "Month");
+
+                    b.HasIndex("EmployeeId", "Year", "Month", "CycleKey")
+                        .IsUnique()
+                        .HasFilter("[CycleKey] IS NOT NULL");
 
                     b.ToTable("SalaryAdvances", (string)null);
                 });
@@ -2108,6 +2387,36 @@ namespace HrPayroll.Infrastructure.Migrations
                     b.Navigation("Employee");
 
                     b.Navigation("PayrollItem");
+                });
+
+            modelBuilder.Entity("HrPayroll.Domain.Entities.DeviceEmployeeMapping", b =>
+                {
+                    b.HasOne("HrPayroll.Domain.Entities.AttendanceDevice", "AttendanceDevice")
+                        .WithMany()
+                        .HasForeignKey("AttendanceDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HrPayroll.Domain.Entities.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AttendanceDevice");
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("HrPayroll.Domain.Entities.DeviceSyncLog", b =>
+                {
+                    b.HasOne("HrPayroll.Domain.Entities.AttendanceDevice", "AttendanceDevice")
+                        .WithMany()
+                        .HasForeignKey("AttendanceDeviceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AttendanceDevice");
                 });
 
             modelBuilder.Entity("HrPayroll.Domain.Entities.Employee", b =>

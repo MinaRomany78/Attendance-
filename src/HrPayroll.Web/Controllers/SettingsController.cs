@@ -37,7 +37,9 @@ public class SettingsController : Controller
     {
         var allowed = new Dictionary<string, (Func<string, bool> Validate, string Message)>
         {
-            [SettingKeys.WorkDaysPerMonth] = (v => int.TryParse(v, out var i) && i is >= 1 and <= 31, "عدد أيام الشهر يجب أن يكون بين 1 و 31"),
+            [SettingKeys.DisplayHourRoundingMode] = (v => Enum.TryParse<HrPayroll.Domain.Enums.HourRoundingMode>(v, true, out var mode) && Enum.IsDefined(mode), "طريقة التقريب غير صالحة"),
+            [SettingKeys.DisplayHourRoundingIncrement] = (v => decimal.TryParse(v, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var increment) && increment is 0.25m or 0.5m or 1m, "خطوة التقريب يجب أن تكون 0.25 أو 0.5 أو 1 ساعة"),
+            [SettingKeys.WorkDaysPerMonth] = (v => int.TryParse(v, out var i) && i == 30, "أساس الراتب الشهري المعتمد هو 30 يوماً"),
             [SettingKeys.WorkHoursPerDay] = (v => int.TryParse(v, out var i) && i is >= 1 and <= 24, "ساعات العمل يجب أن تكون بين 1 و 24"),
             [SettingKeys.DefaultOvertimeMultiplier] = (v => decimal.TryParse(v, out var d) && d == 1m, "سياسة الشركة تمنع مضاعفة الإضافي: القيمة يجب أن تكون 1"),
             [SettingKeys.OvertimeRoundingStepMinutes] = (v => int.TryParse(v, out var i) && i is >= 1 and <= 120, "خطوة التقريب يجب أن تكون بين 1 و 120 دقيقة"),
@@ -49,6 +51,8 @@ public class SettingsController : Controller
             // مفاتيح النعم/المنع — يجب أن تكون كل عناصر الشاشة قابلة للحفظ فعليًا،
             // وإلا فقد يظن المستخدم أنه غيّر سياسة الحساب بينما لا يُحفظ أي تغيير.
             [SettingKeys.LateDeductionEnabled] = (IsBool, "قيمة خصم التأخير يجب أن تكون true أو false"),
+            [SettingKeys.EarlyLeaveDeductionEnabled] = (IsBool, "قيمة خصم الانصراف المبكر يجب أن تكون true أو false"),
+            [SettingKeys.AbsenceDeductionMaxDays] = (v => int.TryParse(v, out var days) && days is >= 0 and <= 31, "سقف أيام خصم الغياب من 0 إلى 31؛ الصفر دون سقف"),
             [SettingKeys.AbsenceDeductionEnabled] = (IsBool, "قيمة خصم الغياب يجب أن تكون true أو false"),
             [SettingKeys.UnpaidLeaveDeductionEnabled] = (IsBool, "قيمة خصم الإجازة بدون أجر يجب أن تكون true أو false"),
             [SettingKeys.RoundOvertimeDown] = (IsBool, "قيمة تقريب الإضافي يجب أن تكون true أو false"),

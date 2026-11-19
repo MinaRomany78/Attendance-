@@ -1,68 +1,61 @@
 @using HrPayroll.Domain.Entities
+@using HrPayroll.Domain.Services
 @model ImportBatch
 @{
-    ViewData["Title"] = "تفاصيل عملية الاستيراد";
+    ViewData["Title"] = "تفاصيل استيراد البصمات";
     var punches = ViewBag.Punches as List<RawPunch> ?? new List<RawPunch>();
+    var periodFrom = (ViewData["PeriodFrom"] as DateTime?)?.Date ?? (punches.Count > 0 ? punches.Min(p => p.PunchTime).Date : (DateTime?)null);
+    var periodTo = (ViewData["PeriodTo"] as DateTime?)?.Date ?? (punches.Count > 0 ? punches.Max(p => p.PunchTime).Date : (DateTime?)null);
 }
-<div class="card">
-    <div class="card-head">
-        <div>
-            <h2>@Model.FileName</h2>
-            <div class="sub">@Model.ImportedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") — بواسطة @(Model.ImportedByName ?? "-")</div>
-        </div>
-        <a class="btn btn-ghost btn-sm" asp-action="Index">رجوع</a>
+<link rel="stylesheet" href="~/css/attendance-import.css" asp-append-version="true" />
+<div class="attendance-import">
+    <div class="page-hero">
+        <div class="page-hero-ico" aria-hidden="true">▤</div>
+        <div class="page-hero-body"><h1>تفاصيل استيراد البصمات</h1><p class="sub"><bdi>@Model.FileName</bdi> · @Model.ImportedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · @(Model.ImportedByName ?? "—")</p></div>
+        <div class="page-hero-actions"><a class="btn btn-ghost" asp-action="Index">إدارة البصمات</a></div>
     </div>
-    <div class="card-body">
-        <div class="def-grid">
-            <div class="def"><div class="k">الصيغة المكتشفة</div><div class="v">@(Model.DetectedFormat ?? "-")</div></div>
-            <div class="def"><div class="k">إجمالي الصفوف</div><div class="v">@Model.TotalRows</div></div>
-            <div class="def"><div class="k">مستوردة بنجاح</div><div class="v">@Model.SuccessRows</div></div>
-            <div class="def"><div class="k">مكررة</div><div class="v">@Model.DuplicateRows</div></div>
-            <div class="def"><div class="k">غير صالحة</div><div class="v">@Model.InvalidRows</div></div>
-            <div class="def"><div class="k">موظف غير مسجل</div><div class="v">@Model.UnknownEmployeeRows</div></div>
-            <div class="def span-2"><div class="k">ملاحظات</div><div class="v">@(Model.Notes ?? "-")</div></div>
-            <div class="def span-2"><div class="k">هاش الملف (لمنع إعادة الاستيراد)</div><div class="v" style="font-size:11px">@Model.FileHash</div></div>
-        </div>
+    <div class="import-summary">
+        <div class="import-metric"><span>إجمالي السجلات</span><strong>@Model.TotalRows</strong></div>
+        <div class="import-metric valid"><span>تم استيرادها</span><strong>@Model.SuccessRows</strong></div>
+        <div class="import-metric duplicate"><span>مكررة</span><strong>@Model.DuplicateRows</strong></div>
+        <div class="import-metric invalid"><span>غير صالحة</span><strong>@Model.InvalidRows</strong></div>
+        <div class="import-metric review"><span>موظفون غير مطابقين</span><strong>@Model.UnknownEmployeeRows</strong></div>
+        <div class="import-metric review"><span>سجلات تحتاج مراجعة</span><strong>@Model.ReviewRows</strong></div>
     </div>
-</div>
-
-<div class="card">
-    <div class="card-head">
-        <h3>البصمات الخام المستوردة (@punches.Count من إجمالي @Model.SuccessRows)</h3>
-        <div class="btn-row">
-            <form method="post" asp-action="Index" class="d-inline" hidden></form>
-            <a class="btn btn-primary btn-sm" asp-action="Index" asp-controller="Attendance"
-               asp-route-from="@Model.ImportedAt.ToLocalTime().AddDays(-1).ToString("yyyy-MM-dd")"
-               asp-route-to="@Model.ImportedAt.ToLocalTime().ToString("yyyy-MM-dd")">معالجة الحضور</a>
+    <section class="card">
+        <div class="card-head"><h2>بيانات العملية</h2><span class="import-status valid">عملية محفوظة</span></div>
+        <div class="card-body"><div class="def-grid">
+            <div class="def"><div class="k">الصيغة المكتشفة من المحتوى</div><div class="v">@(Model.DetectedFormat ?? "—")</div></div>
+            <div class="def"><div class="k">رقم العملية</div><div class="v">#@Model.Id</div></div>
+            <div class="def span-2"><div class="k">ملاحظات التحقق</div><div class="v">@(Model.Notes ?? "لا توجد ملاحظات إضافية")</div></div>
+            <div class="def span-2"><div class="k">بصمة الملف للتحقق من التكرار</div><code class="import-hash">@Model.FileHash</code></div>
+        </div></div>
+    </section>
+    <section class="card">
+        <div class="card-head"><div><h2>البصمات الخام المستوردة</h2><p class="sub">عرض @punches.Count من @Model.SuccessRows بصمة · الأوقات كما سجلها الجهاز محليًا</p></div>
+            @if (periodFrom.HasValue && periodTo.HasValue)
+            {
+                <a class="btn btn-soft btn-sm" asp-controller="Attendance" asp-action="Index" asp-route-from="@periodFrom.Value.ToString("yyyy-MM-dd")" asp-route-to="@periodTo.Value.ToString("yyyy-MM-dd")">عرض الحضور للفترة</a>
+            }
         </div>
-    </div>
-    @if (punches.Count == 0)
-    {
-        ViewData["message"] = "لا توجد بصمات مستوردة في هذه الدفعة";
-        ViewData["icon"] = "📄";
-        <partial name="_Empty" />
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table class="data">
-                <thead><tr><th>#</th><th>كود الجهاز</th><th>الاسم من الجهاز</th><th>رقم الجهاز</th><th>نوع الحركة</th><th>وقت البصمة</th><th>النص الأصلي</th><th>رقم الصف</th></tr></thead>
-                <tbody>
-                @foreach (var p in punches)
-                {
-                    <tr>
-                        <td class="num">@p.Id</td>
-                        <td class="num">@p.DeviceEmployeeCode</td>
-                        <td>@(p.RawEmployeeName ?? "-")</td>
-                        <td class="num">@(p.DeviceId ?? "-")</td>
-                        <td>@(p.AttType ?? "-")</td>
-                        <td class="num">@p.PunchTime.ToString("yyyy-MM-dd HH:mm:ss")</td>
-                        <td class="num">@(p.RawPunchTimeText ?? "-")</td>
-                        <td class="num">@(p.RowNumber?.ToString() ?? "-")</td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        </div>
-    }
+        @if (punches.Count == 0)
+        {
+            <div class="import-empty"><span aria-hidden="true">▤</span><h3>لا توجد بصمات جديدة محفوظة في هذه العملية</h3><p>راجع ملخص التكرار والتحقق أعلاه.</p></div>
+        }
+        else
+        {
+            <div class="table-wrap"><table class="data import-table"><caption class="visually-hidden">البصمات المحفوظة من ملف @Model.FileName</caption><thead><tr><th scope="col">رقم السجل</th><th scope="col">كود البصمة</th><th scope="col">الاسم من الملف</th><th scope="col">الجهاز</th><th scope="col">الحركة</th><th scope="col">التاريخ</th><th scope="col">الوقت</th><th scope="col">الوقت الأصلي</th><th scope="col">صف الملف</th></tr></thead><tbody>
+            @foreach (var p in punches)
+            {
+                var direction = PunchClassifier.ParseExplicitDirection(p.AttType);
+                <tr><td class="num">@p.Id</td><td class="num"><strong>@p.DeviceEmployeeCode</strong></td><td>@(p.RawEmployeeName ?? "—")</td><td>@(p.DeviceId ?? "ملف يدوي")</td><td>@(direction == PunchDirection.In ? "دخول" : direction == PunchDirection.Out ? "خروج" : "غير محدد")<small class="import-cell-sub">@(p.AttType ?? "—")</small></td><td class="num">@p.PunchTime.ToString("yyyy-MM-dd")</td><td class="num">@p.PunchTime.ToString("HH:mm:ss")</td><td class="num">@(p.RawPunchTimeText ?? "—")
+                    @if (!string.IsNullOrWhiteSpace(p.OriginalFieldsJson))
+                    {
+                        <details class="import-original"><summary>الحقول الأصلية</summary><code dir="ltr">@p.OriginalFieldsJson</code></details>
+                    }
+                </td><td class="num">@(p.RowNumber?.ToString() ?? "—")</td></tr>
+            }
+            </tbody></table></div>
+        }
+    </section>
 </div>

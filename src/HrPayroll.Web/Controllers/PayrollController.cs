@@ -1,3 +1,4 @@
+using HrPayroll.Domain.Models;
 using HrPayroll.Domain.Enums;
 using HrPayroll.Infrastructure.Persistence;
 using HrPayroll.Infrastructure.Services;
@@ -8,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HrPayroll.Web.Controllers;
 
-/// <summary>دورة كشف الرواتب: توليد ← مراجعة ← اعتماد ← قفل ← إعادة فتح ← تصدير.</summary>
+/// <summary>اختيار الدورة ثم حسابها وتصحيح التفاصيل وإقفالها، مع تصدير وإعادة فتح مخوّلة.</summary>
 [Authorize(Policy = "ManagePayroll")]
 public class PayrollController : Controller
 {
@@ -45,9 +46,10 @@ public class PayrollController : Controller
     public async Task<IActionResult> Index(int? year, int? month, string? department, int? employeeId, string? search,
         PayrollStatus? status, CancellationToken ct)
     {
-        var y = year ?? DateTime.Today.Year;
-        var m = month ?? DateTime.Today.Month;
-        if (m is < 1 or > 12) m = DateTime.Today.Month;
+        var current = await CompanyPayrollClock.CurrentAsync(_db,ct);
+        var y = year ?? current.Year; var m = month ?? current.Month;
+        if(y is < 2 or > 9998 || m is < 1 or > 12) return BadRequest("فترة غير صالحة.");
+        var period = PayrollPeriod.ForMonth(y,m);
 
         var run = await _db.PayrollRuns.AsNoTracking()
             .Where(r => r.Year == y && r.Month == m && r.Status != PayrollStatus.Cancelled)
@@ -70,7 +72,7 @@ public class PayrollController : Controller
         {
             Year = y,
             Month = m,
-            PeriodText = $"{MonthName(m)} {y}",
+            PeriodText = run != null ? PayrollPeriod.ForRun(run).Display : period.Display,
             CurrentRun = run,
             Readiness = await _payroll.GetReadinessAsync(y, m, ct),
             Rows = rows,
@@ -187,7 +189,7 @@ public class PayrollController : Controller
             annualLeaveBalance = item.Employee?.AnnualLeaveBalance,
             annualLeaveEntitlement = item.Employee?.AnnualLeaveEntitlement,
             annualLeaveCarriedOver = item.Employee?.AnnualLeaveCarriedOver,
-            lateMinutes = item.LateMinutes,
+            lateMinutes = item.LateMinutes, actualEarlyDepartureHours = item.ActualEarlyDepartureHours, actualMissingHours = item.ActualMissingHours,
             rawOvertimeHours = item.RawOvertimeHours,
             approvedOvertimeHours = item.ApprovedOvertimeHours,
             paidOvertimeHours = item.PaidOvertimeHours,
@@ -199,9 +201,12 @@ public class PayrollController : Controller
             additionalDaysRate = item.AdditionalDaysRate,
             additionalDaysAmount = item.AdditionalDaysAmount,
             lateDeduction = item.LateDeduction,
+            earlyLeaveMinutes = item.EarlyLeaveMinutes, earlyLeaveDeduction = item.EarlyLeaveDeduction, shortageDeduction = item.ShortageDeduction,
+            earningsAsOf = item.EarningsAsOf, earnedBasicSalary = item.EarnedBasicSalary, earnedGrossSalary = item.EarnedGrossSalary,
+            earnedDeductions = item.EarnedDeductions, earnedNetSalary = item.EarnedNetSalary, attendanceMissingDays = item.AttendanceMissingDays,
             absenceDeduction = item.AbsenceDeduction,
             unpaidLeaveDeduction = item.UnpaidLeaveDeduction,
-            advances = item.LoansTotal,
+            advances = item.LoansTotal, salaryAdvancesPaid = item.SalaryAdvancesPaid, loanInstallments = item.LoanInstallments, legacyLoanDeductions = item.LegacyLoanDeductions, employeeExpenseRecoveries = item.EmployeeExpenseRecoveries,
             deductionsTotal = item.DeductionsTotal,
             otherDeductions = item.OtherDeductions,
             grossEarnings = item.GrossEarnings,
@@ -222,6 +227,7 @@ public class PayrollController : Controller
         try
         {
             var result = await _payroll.GenerateAsync(year, month, this.CurrentUserName(), this.CurrentUserId(), ct);
+            if (result.Warnings.Count > 0) TempData["Warning"] = string.Join(" | ",result.Warnings);
             TempData["Success"] = $"تم احتساب كشف {year}-{month:00} (إصدار {result.Version}) لعدد {result.ItemCount} موظف. " +
                                   $"إجمالي الاستحقاقات {result.TotalGross:N2} — الخصومات {result.TotalDeductions:N2} — الصافي {result.TotalNet:N2}.";
         }
@@ -229,6 +235,19 @@ public class PayrollController : Controller
         {
             TempData["Error"] = ex.UserMessage(_logger, "فشل احتساب كشف المرتبات");
         }
+        return RedirectToAction(nameof(Index), new { year, month });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Finalize(int id, int year, int month, CancellationToken ct)
+    {
+        try
+        {
+            await _payroll.FinalizeAsync(id, this.CurrentUserName(), this.CurrentUserId(), ct);
+            TempData["Success"] = "تم إقفال كشف الرواتب وحماية بياناته من التعديل.";
+        }
+        catch (Exception ex) { TempData["Error"] = ex.UserMessage(_logger, "تعذر إقفال كشف الرواتب"); }
         return RedirectToAction(nameof(Index), new { year, month });
     }
 

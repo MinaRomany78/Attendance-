@@ -2,11 +2,12 @@
 @model HrPayroll.Web.ViewModels.PayrollDetailsViewModel
 @{
     ViewData["Title"] = $"كشف رواتب {Model.Run.Year}-{Model.Run.Month:00}";
+    var finalized = Model.Run.Status is PayrollStatus.Approved or PayrollStatus.Locked;
 }
 <div class="card">
     <div class="card-head">
         <div>
-            <h2>كشف رواتب @Model.Run.Year-@Model.Run.Month.ToString("00") — إصدار @Model.Run.Version</h2>
+            <h2>كشف رواتب @HrPayroll.Domain.Models.PayrollPeriod.ForRun(Model.Run).Display — إصدار @Model.Run.Version</h2>
             <div class="sub">الحالة: @ExcelExportService.PayrollStatusText(Model.Run.Status) — محسوب بواسطة @(Model.Run.ComputedBy ?? "-")</div>
         </div>
         <div class="btn-row">
@@ -23,17 +24,17 @@
     <div class="stat"><div class="label">إجمالي الإضافي</div><div class="value">@Model.TotalOvertime.ToString("N2")</div></div>
     <div class="stat"><div class="label">مكافآت وبدلات وأيام إضافية</div><div class="value">@Model.TotalBonuses.ToString("N2")</div></div>
     <div class="stat bad"><div class="label">إجمالي الخصومات</div><div class="value">@Model.TotalDeductions.ToString("N2")</div></div>
-    <div class="stat ok"><div class="label">الصافي</div><div class="value">@Model.TotalNet.ToString("N2")</div></div>
+    <div class="stat ok"><div class="label">@(finalized ? "الصافي النهائي" : "الصافي المتوقع")</div><div class="value">@Model.TotalNet.ToString("N2")</div></div>
 </div>
 
 <div class="card">
-    <div class="card-head"><h3>تفاصيل الموظفين</h3></div>
+    <div class="card-head"><div><h3>تفاصيل الموظفين</h3><p class="sub">المكتسب حتى التاريخ منفصل عن الراتب المتوقع للدورة الكاملة.</p></div><input class="table-search" type="search" placeholder="ابحث باسم الموظف أو كوده" data-table-filter="#payrollDetailTable" aria-label="بحث الموظفين في الكشف" /></div>
     <div class="table-wrap">
-        <table class="data">
+        <table class="data" id="payrollDetailTable">
             <thead>
             <tr>
                 <th>كود</th><th>الاسم</th><th>القسم</th><th>الأساسي</th><th>الأجر اليومي</th><th>أجر الساعة</th>
-                <th>إضافي معتمد</th><th>قيمة الإضافي</th><th>إجمالي الاستحقاقات</th><th>إجمالي الخصومات</th><th>الصافي</th><th></th>
+                <th>إضافي معتمد</th><th>قيمة الإضافي</th><th>إجمالي الاستحقاقات</th><th>سلف مسجلة ومدفوعة سابقاً</th><th>أقساط القروض</th><th>مصاريف الموظف</th><th>إجمالي الخصومات</th><th>الصافي</th><th></th>
             </tr>
             </thead>
             <tbody>
@@ -43,13 +44,13 @@
                     <td class="num">@r.EmployeeCode</td>
                     <td>@r.EmployeeName</td>
                     <td>@(r.Department ?? "-")</td>
-                    <td class="money">@r.BasicSalary.ToString("N2")</td>
+                    <td class="money">@r.BasicSalary.ToString("N2")<small>المكتسب حتى @r.EarningsAsOf?.ToString("yyyy-MM-dd"): @(r.EarnedBasicSalary?.ToString("N2")??"غير متاح")</small>@if(r.AttendanceMissingDays>0){<small class="inline-warning">@r.AttendanceMissingDays يوم بلا سجل محسوم</small>}</td>
                     <td class="money">@r.DailyRate.ToString("N2")</td>
                     <td class="money">@r.HourlyRate.ToString("N2")</td>
                     <td class="num">@r.ApprovedOvertimeHours</td>
                     <td class="money">@r.OvertimeAmount.ToString("N2")</td>
                     <td class="money">@r.GrossEarnings.ToString("N2")</td>
-                    <td class="money">@r.TotalDeductions.ToString("N2")</td>
+                    <td>@(r.SalaryAdvancesPaid?.ToString("N2") ?? "غير مفصل تاريخياً")</td><td>@r.LoanInstallments?.ToString("N2")</td><td>@r.EmployeeExpenseRecoveries?.ToString("N2")</td><td class="money">@r.TotalDeductions.ToString("N2")</td>
                     <td class="money">@r.NetSalary.ToString("N2")</td>
                     <td><a class="btn btn-soft btn-sm" asp-action="Payslip" asp-route-id="@r.PayrollItemId">كشف الراتب</a></td>
                 </tr>

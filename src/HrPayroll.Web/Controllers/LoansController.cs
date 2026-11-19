@@ -1,5 +1,7 @@
+using HrPayroll.Domain.Models;
 using HrPayroll.Domain.Entities;
 using HrPayroll.Domain.Enums;
+using HrPayroll.Domain.Services;
 using HrPayroll.Infrastructure.Persistence;
 using HrPayroll.Infrastructure.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -23,7 +25,8 @@ public class LoansController : Controller
 
     public async Task<IActionResult> Index(int? year, int? month, CancellationToken ct)
     {
-        var y = year ?? DateTime.Today.Year;
+        var current = await CompanyPayrollClock.CurrentAsync(_db,ct);
+        var y = year ?? current.Year;
         var q = _db.Loans.Include(l => l.Employee).AsNoTracking().Where(l => l.DeductionYear == y);
         if (month.HasValue) q = q.Where(l => l.DeductionMonth == month.Value);
         ViewBag.Year = y; ViewBag.Month = month;
@@ -34,7 +37,8 @@ public class LoansController : Controller
     public async Task<IActionResult> Create(CancellationToken ct)
     {
         await FillAsync(ct);
-        return View("Form", new Loan { LoanDate = DateTime.Today, DeductionMonth = DateTime.Today.Month, DeductionYear = DateTime.Today.Year, Installments = 1 });
+        var today = await CompanyPayrollClock.TodayAsync(_db,ct); var period = PayrollPeriod.FromDate(today);
+        return View("Form", new Loan { LoanDate = today, DeductionMonth = period.Month, DeductionYear = period.Year, Installments = 1 });
     }
 
     [HttpPost]
@@ -42,10 +46,16 @@ public class LoansController : Controller
     public async Task<IActionResult> Create(Loan model, CancellationToken ct)
     {
         ValidateLoan(model);
+        if (!await _db.Employees.AnyAsync(e => e.Id == model.EmployeeId, ct)) ModelState.AddModelError(nameof(model.EmployeeId), "الموظف غير موجود");
+        if (await FinancialPeriodGuard.IsProtectedAsync(_db, model.DeductionYear, model.DeductionMonth, ct))
+            ModelState.AddModelError(string.Empty, "شهر الخصم مرتبط بكشف رواتب معتمد أو مقفل.");
         if (!ModelState.IsValid) { await FillAsync(ct); return View("Form", model); }
 
+        model.Id = 0; model.Status = ApprovalStatus.Pending;
+        model.PayrollItemId = null; model.PayrollItem = null; model.Employee = null; model.Repayments.Clear();
+        model.InstallmentAmount = 0m; model.IsPaused = false;
         model.CreatedBy = User.Identity?.Name;
-        if (model.RepaymentStartYear <= 0) { model.RepaymentStartYear = model.DeductionYear; model.RepaymentStartMonth = model.DeductionMonth; }
+        model.RepaymentStartYear = model.DeductionYear; model.RepaymentStartMonth = model.DeductionMonth;
         model.OutstandingBalance = model.Amount; // قرض جديد: لم يُسدد منه شيء بعد
         model.PaidAmount = 0m;
         _db.Loans.Add(model);
@@ -61,7 +71,7 @@ public class LoansController : Controller
     {
         var loan = await _db.Loans.FindAsync(new object?[] { id }, ct);
         if (loan is null) return NotFound();
-        if (loan.PayrollItemId.HasValue)
+        if (await HasCollectedRepaymentAsync(loan, ct))
         {
             TempData["Error"] = "لا يمكن تعديل سلفة تم خصمها في كشف رواتب معتمد. ألغِ الاعتماد أولًا.";
             return RedirectToAction(nameof(Index));
@@ -80,18 +90,26 @@ public class LoansController : Controller
 
         var loan = await _db.Loans.FindAsync(new object?[] { id }, ct);
         if (loan is null) return NotFound();
-        if (loan.PayrollItemId.HasValue)
+        if (await HasCollectedRepaymentAsync(loan, ct)
+            || await FinancialPeriodGuard.IsProtectedAsync(_db, loan.DeductionYear, loan.DeductionMonth, ct)
+            || await FinancialPeriodGuard.IsProtectedAsync(_db, model.DeductionYear, model.DeductionMonth, ct))
         {
             TempData["Error"] = "لا يمكن تعديل سلفة تم خصمها في كشف رواتب";
             return RedirectToAction(nameof(Index));
         }
 
+        if (!await _db.Employees.AnyAsync(e => e.Id == model.EmployeeId, ct))
+        { ModelState.AddModelError(nameof(model.EmployeeId), "الموظف غير موجود"); await FillAsync(ct); return View("Form", model); }
+        var followsDeductionPeriod = loan.RepaymentStartYear <= 0
+            || (loan.RepaymentStartYear == loan.DeductionYear && loan.RepaymentStartMonth == loan.DeductionMonth);
         loan.EmployeeId = model.EmployeeId;
         loan.Amount = model.Amount;
         loan.LoanDate = model.LoanDate;
         loan.DeductionMonth = model.DeductionMonth;
         loan.DeductionYear = model.DeductionYear;
         loan.Installments = model.Installments;
+        loan.OutstandingBalance = PayrollCalculator.Round2(Math.Max(0m, loan.Amount - loan.PaidAmount));
+        if (followsDeductionPeriod) { loan.RepaymentStartYear = loan.DeductionYear; loan.RepaymentStartMonth = loan.DeductionMonth; }
         loan.Notes = model.Notes;
         loan.UpdatedAt = DateTime.UtcNow; loan.UpdatedBy = User.Identity?.Name;
         await _db.SaveChangesAsync(ct);
@@ -105,6 +123,12 @@ public class LoansController : Controller
     {
         var loan = await _db.Loans.FindAsync(new object?[] { id }, ct);
         if (loan is null) return NotFound();
+        if (await HasCollectedRepaymentAsync(loan, ct)
+            || await FinancialPeriodGuard.IsProtectedAsync(_db, loan.DeductionYear, loan.DeductionMonth, ct))
+        {
+            TempData["Error"] = "لا يمكن تغيير اعتماد قرض محصل أو مرتبط بفترة رواتب معتمدة.";
+            return RedirectToAction(nameof(Index));
+        }
         loan.Status = loan.Status == ApprovalStatus.Approved ? ApprovalStatus.Pending : ApprovalStatus.Approved;
         loan.UpdatedAt = DateTime.UtcNow; loan.UpdatedBy = User.Identity?.Name;
         await _db.SaveChangesAsync(ct);
@@ -142,9 +166,14 @@ public class LoansController : Controller
             TempData["Error"] = "القسط الشهري يجب أن يكون بين 0 ومبلغ القرض.";
             return RedirectToAction(nameof(Repayments), new { id });
         }
-        if (startMonth is < 1 or > 12)
+        if (startMonth is < 1 or > 12 || startYear is < 1 or > 9999)
         {
             TempData["Error"] = "شهر بدء السداد غير صالح.";
+            return RedirectToAction(nameof(Repayments), new { id });
+        }
+        if (await FinancialPeriodGuard.IsProtectedAsync(_db, startYear, startMonth, ct))
+        {
+            TempData["Error"] = "لا يمكن تغيير الجدول داخل فترة رواتب معتمدة أو مقفلة.";
             return RedirectToAction(nameof(Repayments), new { id });
         }
         var old = $"{loan.InstallmentAmount}/{loan.RepaymentStartYear}-{loan.RepaymentStartMonth}";
@@ -184,6 +213,12 @@ public class LoansController : Controller
     {
         var loan = await _db.Loans.FindAsync(new object?[] { id }, ct);
         if (loan is null) return NotFound();
+        if (year is < 1 or > 9999 || month is < 1 or > 12
+            || await FinancialPeriodGuard.IsProtectedAsync(_db, year, month, ct))
+        {
+            TempData["Error"] = "فترة القسط غير صالحة أو مرتبطة بكشف رواتب معتمد أو مقفل.";
+            return RedirectToAction(nameof(Repayments), new { id });
+        }
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
         var row = await _db.LoanRepayments.FirstOrDefaultAsync(
             r => r.LoanId == id && r.Year == year && r.Month == month, ct);
@@ -223,8 +258,15 @@ public class LoansController : Controller
 
     private void ValidateLoan(Loan model)
     {
+        model.Amount = PayrollCalculator.Round2(model.Amount);
         if (model.Amount <= 0) ModelState.AddModelError(nameof(Loan.Amount), "المبلغ يجب أن يكون أكبر من صفر");
         if (model.DeductionMonth is < 1 or > 12) ModelState.AddModelError(nameof(Loan.DeductionMonth), "شهر غير صالح");
+        if (model.DeductionYear is < 1 or > 9999) ModelState.AddModelError(nameof(Loan.DeductionYear), "سنة غير صالحة");
         if (model.Installments < 1) ModelState.AddModelError(nameof(Loan.Installments), "عدد الأقساط غير صالح");
     }
+
+    private Task<bool> HasCollectedRepaymentAsync(Loan loan, CancellationToken ct)
+        => loan.PayrollItemId.HasValue || loan.PaidAmount > 0m ? Task.FromResult(true)
+            : _db.LoanRepayments.AnyAsync(r => r.LoanId == loan.Id
+                && (r.Status == LoanRepaymentStatus.Collected || r.PayrollItemId.HasValue || r.PaidAmount > 0m), ct);
 }

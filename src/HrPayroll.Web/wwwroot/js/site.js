@@ -173,22 +173,26 @@
             e.preventDefault();
             return;
         }
-        // منع الإرسال المزدوج وإظهار مؤشر الانتظار
-        var submitBtn = form.querySelector('button[type=submit]:not([data-no-spinner])');
-        if (submitBtn && !submitBtn.disabled) {
-            submitBtn.dataset.originalText = submitBtn.innerHTML;
-            submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner"></span> ' + (form.dataset.loadingText || 'جارٍ التنفيذ...');
-            // إعادة التمكين إن ألغى المتصفح الإرسال بسبب التحقق
-            setTimeout(function () {
-                if (document.readyState === 'complete' && submitBtn.disabled && !form.checkValidity()) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = submitBtn.dataset.originalText || 'إرسال';
-                }
-            }, 250);
-        }
+        if (form.dataset.busy === '1') { e.preventDefault(); return; }
+        queueMicrotask(function () {
+            if (e.defaultPrevented || !form.checkValidity()) return;
+            var button = e.submitter || form.querySelector('button[type=submit]');
+            if (!button || button.hasAttribute('data-no-spinner')) return;
+            form.dataset.busy = '1';
+            button.dataset.originalText = button.innerHTML;
+            button.setAttribute('aria-disabled', 'true');
+            button.innerHTML = '<span class="spinner"></span> ' + (form.dataset.loadingText || 'جارٍ التنفيذ...');
+        });
     }, true);
-
+    window.addEventListener('pageshow', function () {
+        document.querySelectorAll('form[data-busy="1"]').forEach(function (form) {
+            delete form.dataset.busy;
+            form.querySelectorAll('[data-original-text]').forEach(function (button) {
+                button.innerHTML = button.dataset.originalText;
+                button.removeAttribute('aria-disabled');
+            });
+        });
+    });
     // ---------- إخفاء التنبيهات تلقائيًا ----------
     document.querySelectorAll('.alert[data-auto-dismiss]').forEach(function (a) {
         setTimeout(function () { a.style.display = 'none'; }, parseInt(a.dataset.autoDismiss, 10) || 6000);

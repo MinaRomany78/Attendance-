@@ -1,141 +1,112 @@
 @using HrPayroll.Domain.Entities
 @{
-    ViewData["Title"] = "استيراد البصمات";
+    ViewData["Title"] = "إدارة واستيراد البصمات";
     var batches = ViewBag.Batches as List<ImportBatch> ?? new List<ImportBatch>();
-    ViewData["Subtitle"] = "ملفا الدخول والخروج المستقلان وسجل الاستيراد";
+    var devices = ViewBag.Devices as IReadOnlyList<AttendanceDevice> ?? Array.Empty<AttendanceDevice>();
 }
-<div class="page-hero">
-    <div class="page-hero-ico" aria-hidden="true">⇩</div>
-    <div class="page-hero-body">
-        <h2>استيراد البصمات</h2>
-        <div class="sub">منطقتان مستقلتان: ملف الدخول وملف الخروج — المطابقة بكود الموظف لا بالاسم</div>
-    </div>
-</div>
-<div class="card">
-    <div class="card-head">
-        <div>
-            <h2>رفع ملفات البصمة ومعالجة الحضور</h2>
-            <div class="sub">
-                ملفان منفصلان من جهاز البصمة: ملف الدخول وملف الخروج. لكل ملف منطقة مستقلة حتى لا يختلط أحدهما بالآخر.
-            </div>
+<link rel="stylesheet" href="~/css/attendance-import.css" asp-append-version="true" />
+<div class="attendance-import">
+    <div class="page-hero">
+        <div class="page-hero-ico" aria-hidden="true">⇅</div>
+        <div class="page-hero-body">
+            <h1>إدارة واستيراد البصمات</h1>
+            <p class="sub">ارفع سجلات الجهاز، راجع المطابقة والنتائج، ثم أكّد الاستيراد.</p>
+        </div>
+        <div class="page-hero-actions">
+            <a class="btn btn-ghost" href="#import-history">سجل الاستيراد</a>
+            <a class="btn btn-ghost" asp-action="Roster">مطابقة قائمة موظفي الجهاز</a>
         </div>
     </div>
-    <div class="card-body">
-        <form method="post" asp-action="Upload" enctype="multipart/form-data"
-              id="importForm" data-file-zones data-loading-text="جارٍ التحقق من الملفات...">
-
-            <div class="upload-grid">
-                <!-- ===================== منطقة ملف الدخول ===================== -->
-                <section class="upload-zone zone-entry" data-zone="entry">
-                    <header class="upload-zone-head">
-                        <span class="upload-zone-ico" aria-hidden="true">⬇️</span>
-                        <div class="upload-zone-title">
-                            <h3>رفع ملف الدخول</h3>
-                            <span class="hint">سجلات تسجيل الدخول إلى العمل</span>
-                        </div>
-                        <span class="file-state" data-file-state="entry">لم يتم الاختيار</span>
-                    </header>
-
-                    <label class="upload-drop">
-                        <input type="file" name="entryFile" id="entryFile"
-                               accept=".xlsx,.xls,.csv,.xml,.txt" data-file-input="entry" />
-                        <span class="upload-drop-ico" aria-hidden="true">📥</span>
-                        <span class="upload-drop-cta">اختيار ملف الدخول</span>
-                        <span class="upload-drop-hint">اضغط لاختيار الملف أو اسحبه هنا — xlsx / xls / csv / xml</span>
-                    </label>
-
-                    <ul class="upload-meta">
-                        <li><span class="k">اسم الملف:</span> <span class="v" data-file-name="entry">—</span></li>
-                        <li><span class="k">حجم الملف:</span> <span class="v" data-file-size="entry">—</span></li>
-                        <li><span class="k">آخر تعديل للملف:</span> <span class="v" data-file-date="entry">—</span></li>
-                        <li><span class="k">الحالة:</span> <span class="v" data-file-state-detail="entry">بانتظار اختيار الملف</span></li>
-                    </ul>
-                </section>
-
-                <!-- ===================== منطقة ملف الخروج ===================== -->
-                <section class="upload-zone zone-exit" data-zone="exit">
-                    <header class="upload-zone-head">
-                        <span class="upload-zone-ico" aria-hidden="true">⬆️</span>
-                        <div class="upload-zone-title">
-                            <h3>رفع ملف الخروج</h3>
-                            <span class="hint">سجلات تسجيل الخروج من العمل</span>
-                        </div>
-                        <span class="file-state" data-file-state="exit">لم يتم الاختيار</span>
-                    </header>
-
-                    <label class="upload-drop">
-                        <input type="file" name="exitFile" id="exitFile"
-                               accept=".xlsx,.xls,.csv,.xml,.txt" data-file-input="exit" />
-                        <span class="upload-drop-ico" aria-hidden="true">📤</span>
-                        <span class="upload-drop-cta">اختيار ملف الخروج</span>
-                        <span class="upload-drop-hint">اضغط لاختيار الملف أو اسحبه هنا — xlsx / xls / csv / xml</span>
-                    </label>
-
-                    <ul class="upload-meta">
-                        <li><span class="k">اسم الملف:</span> <span class="v" data-file-name="exit">—</span></li>
-                        <li><span class="k">حجم الملف:</span> <span class="v" data-file-size="exit">—</span></li>
-                        <li><span class="k">آخر تعديل للملف:</span> <span class="v" data-file-date="exit">—</span></li>
-                        <li><span class="k">الحالة:</span> <span class="v" data-file-state-detail="exit">بانتظار اختيار الملف</span></li>
-                    </ul>
-                </section>
+    <ol class="import-steps" aria-label="مراحل الاستيراد">
+        <li class="current" aria-current="step"><span>1</span> اختيار الملف</li>
+        <li><span>2</span> تحليل ومراجعة</li>
+        <li><span>3</span> تأكيد الاستيراد</li>
+    </ol>
+    <section class="card">
+        <div class="card-head"><div><h2>اختر طريقة الاستيراد</h2><p class="sub">تُفحص محتويات الملف قبل حفظ أي بصمات.</p></div></div>
+        <div class="card-body">
+            <div class="import-methods" role="tablist" aria-label="طرق الاستيراد">
+                <button class="import-method active" type="button" role="tab" id="method-combined" aria-controls="pane-combined" aria-selected="true" data-import-tab="combined">
+                    <span class="import-method-icon" aria-hidden="true">⇅</span><span><strong>ملف ZKTeco موحد</strong><small>الدخول والخروج في ملف واحد</small></span><span class="import-recommended">موصى به</span>
+                </button>
+                <button class="import-method" type="button" role="tab" id="method-separate" aria-controls="pane-separate" aria-selected="false" tabindex="-1" data-import-tab="separate">
+                    <span class="import-method-icon" aria-hidden="true">⇥</span><span><strong>ملفات منفصلة</strong><small>ملف دخول وملف خروج</small></span>
+                </button>
+                <button class="import-method" type="button" role="tab" id="method-device" aria-controls="pane-device" aria-selected="false" tabindex="-1" data-import-tab="device">
+                    <span class="import-method-icon" aria-hidden="true">▣</span><span><strong>اتصال مباشر بالجهاز</strong><small>إعداد الأجهزة وحالة الدعم</small></span>
+                </button>
             </div>
-
-            <div class="alert alert-danger upload-error" id="importFormError" hidden>
-                <span>اختر ملف الدخول أو ملف الخروج على الأقل قبل المتابعة.</span>
+            <div id="pane-combined" class="import-pane" role="tabpanel" aria-labelledby="method-combined" data-import-pane="combined">
+                <form method="post" asp-action="Upload" enctype="multipart/form-data" data-attendance-upload data-loading-text="جارٍ تحليل ملف البصمة...">
+                    <input type="hidden" name="importMode" value="combined" />
+                    <section class="import-dropzone" data-upload-zone>
+                        <div class="import-drop-icon" aria-hidden="true">⇩</div>
+                        <h2>استيراد ملف البصمة الموحد</h2><p>اسحب ملف ZKTeco هنا أو اختره من جهازك</p>
+                        <label class="btn btn-primary import-picker" for="combinedFile">اختيار ملف</label>
+                        <input class="import-file-input" type="file" name="combinedFile" id="combinedFile" accept=".txt,.csv,.xlsx,.xls,.xml" data-upload-input aria-describedby="combined-help combined-feedback" />
+                        <p class="import-help" id="combined-help">TXT · CSV · XLSX · XLS · XML — حتى 25 ميجابايت<br />يدعم الملفات دون عناوين والأسماء العربية بترميز UTF-8 وWindows-1256</p>
+                        <div class="import-selected" data-upload-selected hidden><strong data-upload-name></strong><span data-upload-size></span></div>
+                        <p class="import-feedback" id="combined-feedback" data-upload-feedback role="status" aria-live="polite">لم يتم اختيار ملف بعد</p>
+                        <button class="btn btn-ghost btn-sm" type="button" data-clear-file hidden>مسح الملف</button>
+                    </section>
+                    <div class="import-notice"><strong>تحديد الحركة تلقائيًا</strong><span>تُقرأ I كدخول وO كخروج. تُعرض الأكواد غير المطابقة والحركات الغامضة للمراجعة قبل التأكيد.</span></div>
+                    <div class="import-form-error alert alert-danger" data-upload-error role="alert" hidden></div>
+                    <div class="import-form-actions"><button type="submit" class="btn btn-primary btn-lg">تحليل الملف</button><span class="import-help">المعاينة أولًا، ثم الحفظ بعد تأكيدك</span></div>
+                    <div class="import-progress" data-upload-progress hidden role="status" aria-live="polite"><progress aria-label="تحليل الملف"></progress><span>جارٍ رفع الملف وتحليل سجلاته، يرجى الانتظار…</span></div>
+                </form>
             </div>
-
-            <div class="alert alert-info" style="margin-top:16px">
-                <span>
-                    المطابقة تتم بكود الموظف/كود البصمة لا بالاسم، فلا تُدمج بيانات موظفين متشابهين في الاسم.
-                    البصمات المكررة (نفس الموظف ونفس الوقت) لا تُستورد مرتين، وأي كود غير مسجَّل يظهر في تقرير المعاينة
-                    للمراجعة دون ربطه بموظف آخر. يمكن رفع أحد الملفين فقط إذا كان متاحًا.
-                </span>
+            <div id="pane-separate" class="import-pane" role="tabpanel" aria-labelledby="method-separate" data-import-pane="separate" hidden>
+                <form method="post" asp-action="Upload" enctype="multipart/form-data" data-attendance-upload data-loading-text="جارٍ تحليل ملفات البصمة...">
+                    <input type="hidden" name="importMode" value="separate" />
+                    <div class="import-upload-pair">
+                        @foreach (var item in new[] { (Key: "entry", Name: "entryFile", Title: "ملف الدخول", Icon: "↙"), (Key: "exit", Name: "exitFile", Title: "ملف الخروج", Icon: "↗") })
+                        {
+                            <section class="import-dropzone import-dropzone-small" data-upload-zone>
+                                <div class="import-drop-icon" aria-hidden="true">@item.Icon</div><h3>@item.Title</h3><p>اسحب الملف هنا أو اختره</p>
+                                <label class="btn btn-soft import-picker" for="@item.Name">اختيار @item.Title</label>
+                                <input class="import-file-input" type="file" name="@item.Name" id="@item.Name" accept=".txt,.csv,.xlsx,.xls,.xml" data-upload-input aria-describedby="@(item.Key)-feedback" />
+                                <p class="import-help">TXT · CSV · XLSX · XLS · XML — حتى 25 ميجابايت</p>
+                                <div class="import-selected" data-upload-selected hidden><strong data-upload-name></strong><span data-upload-size></span></div>
+                                <p class="import-feedback" id="@(item.Key)-feedback" data-upload-feedback role="status" aria-live="polite">لم يتم اختيار ملف بعد</p>
+                                <button type="button" class="btn btn-ghost btn-sm" data-clear-file hidden>مسح الملف</button>
+                            </section>
+                        }
+                    </div>
+                    <p class="import-help">يمكن رفع ملف واحد أو الملفين. اتجاه الحركة الصريح داخل السجل هو المرجع، ويُعرض أي تعارض مع نوع الملف للمراجعة.</p>
+                    <div class="import-form-error alert alert-danger" data-upload-error role="alert" hidden></div>
+                    <div class="import-form-actions"><button type="submit" class="btn btn-primary btn-lg">تحليل الملفات</button></div>
+                    <div class="import-progress" data-upload-progress hidden role="status" aria-live="polite"><progress aria-label="تحليل الملفات"></progress><span>جارٍ رفع الملفات وتحليل السجلات…</span></div>
+                </form>
             </div>
-
-            <div class="upload-submit">
-                <button type="submit" class="btn btn-primary btn-lg">رفع الملفات ومعالجة الحضور</button>
-                <span class="hint">سيتم تحليل الملفين والتحقق منهما ثم عرض معاينة مستقلة لكل ملف قبل أي استيراد.</span>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-head">
-        <h3>سجل عمليات الاستيراد</h3>
-        <div class="sub">كل ملف يُسجَّل بشكل مستقل مع عدد السجلات المقبولة والمكررة وغير الصالحة، ويمكن فتحه لمراجعة تفاصيله.</div>
-    </div>
-    @if (batches.Count == 0)
-    {
-        ViewData["message"] = "لم يتم استيراد أي ملف بصمات بعد";
-        ViewData["icon"] = "📄";
-        <partial name="_Empty" />
-    }
-    else
-    {
-        <div class="table-wrap">
-            <table class="data">
-                <thead>
-                <tr><th>الملف</th><th>الصيغة</th><th>التاريخ</th><th>المستخدم</th><th>إجمالي</th><th>مقبول</th><th>مكرر</th><th>غير صالح</th><th>موظف غير معروف</th><th></th></tr>
-                </thead>
-                <tbody>
-                @foreach (var b in batches)
+            <div id="pane-device" class="import-pane" role="tabpanel" aria-labelledby="method-device" data-import-pane="device" hidden>
+                <div class="import-device-empty"><div class="import-drop-icon" aria-hidden="true">▣</div><h2>إدارة الاتصال بأجهزة ZKTeco</h2><p>احفظ عنوان الجهاز وموديله ومنطقته الزمنية من شاشة الأجهزة. تعتمد إمكانية الاتصال وتنزيل البصمات على توفر برنامج تشغيل موثّق متوافق مع الموديل.</p><span class="import-status review">الاتصال المباشر غير مفعّل حتى توفير برنامج تشغيل متوافق</span><div class="btn-row"><a class="btn btn-primary" asp-controller="AttendanceDevices" asp-action="Index">إدارة الأجهزة المحفوظة</a></div></div>
+                @if (devices.Count > 0)
                 {
-                    <tr>
-                        <td class="wrap">@b.FileName</td>
-                        <td>@(b.DetectedFormat ?? "-")</td>
-                        <td class="num">@b.ImportedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td>
-                        <td>@(b.ImportedByName ?? "-")</td>
-                        <td class="num">@b.TotalRows</td>
-                        <td class="num">@b.SuccessRows</td>
-                        <td class="num">@b.DuplicateRows</td>
-                        <td class="num">@b.InvalidRows</td>
-                        <td class="num">@b.UnknownEmployeeRows</td>
-                        <td><a class="btn btn-soft btn-sm" asp-action="Details" asp-route-id="@b.Id">عرض</a></td>
-                    </tr>
+                    <div class="table-wrap"><table class="data import-table"><thead><tr><th scope="col">الجهاز</th><th scope="col">العنوان</th><th scope="col">الحالة</th><th scope="col">آخر مزامنة ناجحة</th></tr></thead><tbody>
+                    @foreach (var device in devices)
+                    {
+                        <tr><td><strong>@device.Name</strong><small class="import-cell-sub">@device.Model</small></td><td class="num">@device.IpAddress:@device.TcpPort</td><td><span class="import-status review">برنامج تشغيل غير مهيأ</span></td><td class="num">@(device.LastSuccessfulSyncUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "لم تتم المزامنة")</td></tr>
+                    }
+                    </tbody></table></div>
                 }
-                </tbody>
-            </table>
+            </div>
         </div>
-    }
+    </section>
+    <section class="card" id="import-history">
+        <div class="card-head"><div><h2>سجل عمليات الاستيراد</h2><p class="sub">آخر 30 عملية مع ملخص السجلات ونتيجة التحقق.</p></div><span class="import-count">@batches.Count عملية</span></div>
+        @if (batches.Count == 0)
+        {
+            <div class="import-empty"><span aria-hidden="true">▤</span><h3>لا توجد عمليات استيراد بعد</h3><p>ابدأ بتحليل ملف البصمة؛ ستظهر العمليات المؤكدة هنا.</p></div>
+        }
+        else
+        {
+            <div class="table-wrap"><table class="data import-table"><caption class="visually-hidden">سجل استيراد البصمات</caption><thead><tr><th scope="col">الملف</th><th scope="col">الصيغة</th><th scope="col">التاريخ</th><th scope="col">المستخدم</th><th scope="col">إجمالي</th><th scope="col">مستورد</th><th scope="col">مكرر</th><th scope="col">غير صالح</th><th scope="col">غير مطابق</th><th scope="col">التفاصيل</th></tr></thead><tbody>
+            @foreach (var b in batches)
+            {
+                <tr><td class="wrap"><strong>@b.FileName</strong></td><td>@(b.DetectedFormat ?? "—")</td><td class="num">@b.ImportedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td><td>@(b.ImportedByName ?? "—")</td><td class="num">@b.TotalRows</td><td class="num">@b.SuccessRows</td><td class="num">@b.DuplicateRows</td><td class="num">@b.InvalidRows</td><td class="num">@b.UnknownEmployeeRows</td><td><a class="btn btn-soft btn-sm" asp-action="Details" asp-route-id="@b.Id" aria-label="تفاصيل استيراد @b.FileName">عرض</a></td></tr>
+            }
+            </tbody></table></div>
+        }
+    </section>
 </div>
+@section Scripts { <script src="~/js/attendance-import.js" asp-append-version="true"></script> }

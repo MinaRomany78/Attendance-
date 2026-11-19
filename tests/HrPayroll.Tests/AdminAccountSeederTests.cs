@@ -3,6 +3,7 @@ using HrPayroll.Domain.Enums;
 using HrPayroll.Infrastructure.Persistence;
 using HrPayroll.Infrastructure.Seed;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -39,7 +40,7 @@ public class AdminAccountSeederTests
             _connection.Open();
             var services = new ServiceCollection();
             services.AddLogging();
-            services.AddDataProtection();
+            services.AddDataProtection().UseEphemeralDataProtectionProvider();
             services.AddDbContext<AppDbContext>(o => o.UseSqlite(_connection));
             services.AddIdentityCore<ApplicationUser>(o =>
                 {

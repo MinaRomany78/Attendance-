@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HrPayroll.Domain\HrPayroll.Domain.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
@@ -21,7 +22,7 @@
 
   <ItemGroup>
     <!-- خط عربي مضمّن لتوليد ملفات PDF (لا يحتاج أي تثبيت على الجهاز) -->
-    <None Include="Assets\Fonts\*.ttf" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Assets\Fonts\*.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

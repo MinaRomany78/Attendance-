@@ -33,6 +33,12 @@ public class SalaryAdvanceConfiguration : IEntityTypeConfiguration<SalaryAdvance
     public void Configure(EntityTypeBuilder<SalaryAdvance> b)
     {
         b.ToTable("SalaryAdvances");
+        b.Property(x => x.CycleKey).HasMaxLength(30);
+        b.Property(x => x.PreparedAmount).HasColumnType("decimal(18,2)");
+        b.Property(x => x.RegisteredAmount).HasColumnType("decimal(18,2)");
+        b.Property(x => x.PreparedBy).HasMaxLength(200);
+        b.Property(x => x.Revision).IsConcurrencyToken();
+        b.HasIndex(x => new { x.EmployeeId, x.Year, x.Month, x.CycleKey }).IsUnique().HasFilter("[CycleKey] IS NOT NULL");
         b.Property(x => x.BasicSalary).HasColumnType("decimal(18,2)");
         b.Property(x => x.EarnedAmount).HasColumnType("decimal(18,2)");
         b.Property(x => x.WorkingHours).HasColumnType("decimal(18,2)");
@@ -55,7 +61,8 @@ public class SalaryAdvanceConfiguration : IEntityTypeConfiguration<SalaryAdvance
         b.HasOne(x => x.PayrollItem).WithMany().HasForeignKey(x => x.PayrollItemId).OnDelete(DeleteBehavior.Restrict);
 
         // منع سلفة مكررة لنفس الموظف والفترة (ما لم تُلغَ).
-        b.HasIndex(x => new { x.EmployeeId, x.Year, x.Month }).IsUnique();
+        b.HasIndex(x => new { x.EmployeeId, x.Year, x.Month });
+        b.HasIndex(x => x.PaymentRequestId).IsUnique().HasFilter("[PaymentRequestId] IS NOT NULL");
         b.HasIndex(x => x.PayrollItemId);
         b.HasIndex(x => x.Status);
     }

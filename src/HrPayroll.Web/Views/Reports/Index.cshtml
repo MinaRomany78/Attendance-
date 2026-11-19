@@ -1,4 +1,4 @@
-@model HrPayroll.Web.ViewModels.ReportsIndexViewModel
+﻿@model HrPayroll.Web.ViewModels.ReportsIndexViewModel
 @{
     ViewData["Title"] = "التقارير والتصدير";
     var f = Model.Filter;
@@ -27,7 +27,7 @@
         </div>
     </div>
     <div class="card-body">
-        <form method="get" class="filters">
+        <form method="get" class="filters" data-loading-text="جاري تجهيز التقرير...">
             <div class="field"><label>من تاريخ</label><input type="date" name="from" value="@f.From.ToString("yyyy-MM-dd")" /></div>
             <div class="field"><label>إلى تاريخ</label><input type="date" name="to" value="@f.To.ToString("yyyy-MM-dd")" /></div>
             <div class="field">
@@ -79,86 +79,32 @@
 </div>
 
 <div class="card">
-    <div class="card-head"><h3>التقارير المتاحة</h3></div>
+    <div class="card-head"><div><h3>التقارير المتاحة</h3><p class="sub">اختر التقرير المطلوب. تُطبق الفترة والفلاتر أعلاه على العرض والتصدير.</p></div></div>
     <div class="card-body">
-        <div class="table-wrap">
-            <table class="data">
-                <thead><tr><th>التقرير</th><th>الوصف</th><th>عرض</th><th>Excel</th><th>PDF</th></tr></thead>
-                <tbody>
-                <tr>
-                    <td>الحضور اليومي</td>
-                    <td class="wrap">كل سجل حضور مع الوردية والبداية والنهاية والدخول والخروج وساعات العمل والتأخير والإضافي والحالة</td>
-                    <td><a class="btn btn-soft btn-sm" asp-action="Daily" asp-all-route-data="q">عرض</a></td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportDailyExcel" asp-all-route-data="q">Excel</a></td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportDailyPdf" asp-all-route-data="q">PDF</a></td>
-                </tr>
-                <tr>
-                    <td>سجلات الدخول المصنفة</td>
-                    <td class="wrap">كل بصمة صنّفت دخولاً مع رقم السجل الأصلي في البصمات الخام وحالة ومصدر التصنيف</td>
-                    <td>—</td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportEntryExcel" asp-all-route-data="q">Excel</a></td>
-                    <td>—</td>
-                </tr>
-                <tr>
-                    <td>سجلات الخروج المصنفة</td>
-                    <td class="wrap">كل بصمة صنّفت خروجاً مع رقم السجل الأصلي في البصمات الخام وحالة ومصدر التصنيف</td>
-                    <td>—</td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportExitExcel" asp-all-route-data="q">Excel</a></td>
-                    <td>—</td>
-                </tr>
-                <tr>
-                    <td>تقرير الأقسام والمسميات الوظيفية</td>
-                    <td class="wrap">تجميع حسب القسم ثم المسمى الوظيفي مع أسماء الموظفين وعدد الحاضرين والغائبين والمتأخرين لكل مجموعة</td>
-                    <td><a class="btn btn-soft btn-sm" asp-action="Departments" asp-all-route-data="q">عرض</a></td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportDepartmentsExcel" asp-all-route-data="q">Excel</a></td>
-                    <td>—</td>
-                </tr>
-                <tr>
-                    <td>الإجازات والأرصدة</td>
-                    <td class="wrap">طلبات الإجازة داخل الفترة مع النوع والحالة، وأرصدة الإجازة السنوية المستحق والمستخدم والمتبقي لكل موظف</td>
-                    <td><a class="btn btn-soft btn-sm" asp-action="Leaves" asp-all-route-data="q">عرض</a></td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportLeavesExcel" asp-all-route-data="q">Excel</a></td>
-                    <td>—</td>
-                </tr>
-                <tr>
-                    <td>ملخص الأقسام (مختصر)</td>
-                    <td class="wrap">من حضر، من غاب، من تأخر، ومن لديه بصمات ناقصة لكل قسم بدون تفصيل المسميات</td>
-                    <td>—</td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportDepartmentExcel" asp-all-route-data="q">Excel</a></td>
-                    <td>—</td>
-                </tr>
-                <tr>
-                    <td>تقرير الإضافي</td>
-                    <td class="wrap">الوردية ونهاية الوردية والخروج الفعلي والإضافي الخام والمعتمد</td>
-                    <td><a class="btn btn-soft btn-sm" asp-action="Overtime" asp-all-route-data="q">عرض</a></td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportOvertimeExcel" asp-all-route-data="q">Excel</a></td>
-                    <td>—</td>
-                </tr>
-                <tr>
-                    <td>الغياب والتأخير</td>
-                    <td class="wrap">الغياب، التأخير، الانصراف المبكر، والبصمات الناقصة</td>
-                    <td><a class="btn btn-soft btn-sm" asp-action="Absence" asp-all-route-data="q">عرض</a></td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportAbsenceExcel" asp-all-route-data="q">Excel</a></td>
-                    <td>—</td>
-                </tr>
-                <tr>
-                    <td>البصمات الخام</td>
-                    <td class="wrap">البصمات كما وردت من جهاز البصمة بدون أي تعديل (لأغراض التدقيق)</td>
-                    <td>—</td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportRawPunches" asp-all-route-data="q">Excel</a></td>
-                    <td>—</td>
-                </tr>
-                <tr>
-                    <td>ملف شامل</td>
-                    <td class="wrap">الأوراق الثمانية في ملف Excel واحد: البصمات الخام، الدخول، الخروج، الحضور اليومي، التأخير، الإضافي، الرواتب، الاستثناءات</td>
-                    <td>—</td>
-                    <td><a class="btn btn-ghost btn-sm" asp-action="ExportFullWorkbook" asp-all-route-data="q">Excel</a></td>
-                    <td>—</td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
+    @{
+        var reportLinks = new (string Title,string Summary,string? View,string Excel,string? Pdf)[] {
+            ("الحضور اليومي","الدخول والخروج والعمل الفعلي والتأخير والانصراف المبكر لكل موظف.","Daily","ExportDailyExcel","ExportDailyPdf"),
+            ("الدخول المصنّف","حركات الدخول المرتبطة بالبصمة الأصلية ومصدر التصنيف.",null,"ExportEntryExcel",null),
+            ("الخروج المصنّف","حركات الخروج المرتبطة بالبصمة الأصلية ومصدر التصنيف.",null,"ExportExitExcel",null),
+            ("الأقسام والمسميات","تجميع الموظفين والحضور والغياب بحسب القسم والمسمى.","Departments","ExportDepartmentsExcel",null),
+            ("الإجازات والأرصدة","الإجازات المعتمدة ورصيد الموظف المستخدم والمتبقي.","Leaves","ExportLeavesExcel",null),
+            ("ملخص الأقسام","مؤشرات مختصرة للحضور والغياب والبصمات الناقصة.",null,"ExportDepartmentExcel",null),
+            ("الإضافي","الإضافي الخام والمعتمد مع نهاية الوردية والخروج الفعلي.","Overtime","ExportOvertimeExcel",null),
+            ("الغياب والتأخير","الغياب والتأخير والانصراف المبكر والحالات غير المحسومة.","Absence","ExportAbsenceExcel",null),
+            ("البصمات الخام","السجلات الأصلية كما وردت من الجهاز لأغراض التدقيق.",null,"ExportRawPunches",null),
+            ("الملف الشامل","ثماني أوراق تجمع الحضور والرواتب والإضافي والاستثناءات.",null,"ExportFullWorkbook",null)
+        };
+    }
+    <div class="report-grid">
+    @for(var index=0;index<reportLinks.Length;index++){
+        var report=reportLinks[index];
+        <article class="report-card"><span class="report-number">@((index+1).ToString("00"))</span><h3>@report.Title</h3><p>@report.Summary</p><div class="btn-row">
+        @if(report.View is not null){<a class="btn btn-soft btn-sm" asp-action="@report.View" asp-all-route-data="q">عرض التقرير</a>}
+        <a class="btn btn-ghost btn-sm" asp-action="@report.Excel" asp-all-route-data="q">Excel</a>
+        @if(report.Pdf is not null){<a class="btn btn-ghost btn-sm" asp-action="@report.Pdf" asp-all-route-data="q">PDF</a>}
+        </div></article>
+    }
+    </div></div>
 </div>
 
 <div class="card">
@@ -181,7 +127,7 @@
                 @foreach (var r in Model.PayrollRuns)
                 {
                     <tr>
-                        <td class="num">@r.Year-@r.Month.ToString("00")</td>
+                        <td class="num">@HrPayroll.Domain.Models.PayrollPeriod.ForRun(r).Display</td>
                         <td class="num">@r.Version</td>
                         <td class="money">@r.TotalNet.ToString("N2")</td>
                         <td><a class="btn btn-ghost btn-sm" asp-action="ExportPayrollExcel" asp-route-runId="@r.Id">Excel</a></td>
@@ -193,3 +139,4 @@
         </div>
     }
 </div>
+

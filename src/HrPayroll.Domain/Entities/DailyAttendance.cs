@@ -1,4 +1,7 @@
 using HrPayroll.Domain.Enums;
+using HrPayroll.Domain.Services;
+using HrPayroll.Domain.ValueObjects;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HrPayroll.Domain.Entities;
 
@@ -66,8 +69,28 @@ public class DailyAttendance : BaseEntity
     /// <summary>إجمالي دقائق العمل الفعلية (خروج − دخول) عند توفر البصمتين.</summary>
     public int WorkedMinutes =>
         CheckInTime.HasValue && CheckOutTime.HasValue
-            ? Math.Max(0, (int)Math.Round((CheckOutTime.Value - CheckInTime.Value).TotalMinutes))
+            ? AttendanceCalculator.MinutesBetween(CheckInTime.Value, CheckOutTime.Value)
             : 0;
+
+    [NotMapped] public decimal ActualWorkedHours => HourDurationCalculator.ToHours(WorkedMinutes);
+    [NotMapped] public int ActualLateMinutes => CheckInTime.HasValue && ShiftEnd > ShiftStart
+        ? AttendanceCalculator.MinutesBetween(ShiftStart, CheckInTime.Value) : 0;
+    [NotMapped] public decimal ActualLateHours => HourDurationCalculator.ToHours(ActualLateMinutes);
+    [NotMapped] public decimal LateHours => HourDurationCalculator.ToHours(LateMinutes);
+    [NotMapped] public decimal ActualEarlyLeaveHours => HourDurationCalculator.ToHours(EarlyLeaveMinutes);
+    [NotMapped] public decimal RawOvertimeHours => HourDurationCalculator.ToHours(RawOvertimeMinutes);
+    [NotMapped] public decimal ApprovedOvertimeHours => HourDurationCalculator.ToHours(ApprovedOvertimeMinutes);
+    [NotMapped] public decimal PaidOvertimeHours => HourDurationCalculator.ToHours(PaidOvertimeMinutes);
+    [NotMapped] public int? MissingScheduledMinutes => ShiftEnd > ShiftStart
+        ? AttendanceCalculator.CalculateDay(new ShiftWindow(ShiftStart, ShiftEnd), CheckInTime, CheckOutTime, 0, 0).MissingScheduledMinutes : null;
+    [NotMapped] public decimal? ActualMissingHours => MissingScheduledMinutes.HasValue
+        ? HourDurationCalculator.ToHours(MissingScheduledMinutes.Value) : null;
+    [NotMapped] public bool IsPresent => CheckInTime.HasValue && CheckOutTime > CheckInTime;
+    [NotMapped] public bool IsLate => ActualLateMinutes > 0;
+    [NotMapped] public bool HasEarlyDeparture => EarlyLeaveMinutes > 0;
+    [NotMapped] public bool HasMissingPunch => CheckInTime is null || CheckOutTime is null;
+    [NotMapped] public bool NeedsReview => PunchReviewStatus == ClassificationStatus.NeedsReview || HasIncompletePunches
+        || (CheckInTime.HasValue && CheckOutTime.HasValue && CheckOutTime <= CheckInTime);
 
     public ICollection<AttendanceCorrection> Corrections { get; set; } = new List<AttendanceCorrection>();
 }

@@ -1,5 +1,3 @@
-using HrPayroll.Infrastructure.Import;
-
 namespace HrPayroll.Infrastructure.Import;
 
 /// <summary>يكتشف أعمدة ملف البصمة ويربطها بالحقول الداخلية.</summary>
@@ -7,9 +5,9 @@ public static class ColumnMapper
 {
     private static readonly string[] NoAliases = { "no", "nо", "seq", "serial", "#", "م", "رقم" };
     private static readonly string[] DeviceAliases = { "deviceid", "device", "devicecode", "deviceno", "جهاز", "رقمالجهاز", "mai" };
-    private static readonly string[] CodeAliases = { "id", "empid", "employeeid", "employeecode", "code", "userid", "user", "acno", "enrollid", "كود", "كودالموظف", "الرقمالوظيفي", "رقمالموظف" };
+    private static readonly string[] CodeAliases = { "id", "empid", "employeeid", "employeecode", "deviceemployeecode", "biometriccode", "biometricid", "pin", "code", "userid", "user", "acno", "enrollid", "كود", "كودالموظف", "كودالبصمة", "الرقمالوظيفي", "رقمالموظف" };
     private static readonly string[] NameAliases = { "name", "employeename", "username", "الاسم", "اسم", "اسمالموظف" };
-    private static readonly string[] TypeAliases = { "atttype", "type", "statetype", "punchtype", "status", "نوع", "نوعالبصمة", "نوعالحركة", "الحالة" };
+    private static readonly string[] TypeAliases = { "atttype", "type", "statetype", "punchtype", "direction", "inout", "status", "نوع", "نوعالبصمة", "نوعالحركة", "الحالة", "الاتجاه" };
     private static readonly string[] TimeAliases = { "atttime", "time", "datetime", "punchtime", "attdatetime", "recordtime", "logtime", "التاريخالوقت", "الوقت", "التاريخ", "وقتالبصمة", "تاريخالوقت" };
 
     public static string Normalize(string? header)
@@ -32,6 +30,14 @@ public static class ColumnMapper
 
         for (var r = 0; r < limit; r++)
         {
+            // Names and unknown metadata can literally contain "ID" or "Time".
+            // Positive timestamp evidence takes precedence over header aliases.
+            var fields = rows[r];
+            if ((fields.Length == 8 && !string.IsNullOrWhiteSpace(fields[0])
+                    && ZkAttendanceFormatDetector.HasTimestamp(fields[1]))
+                || (fields.Length == 6 && !string.IsNullOrWhiteSpace(fields[2])
+                    && PunchTimeParser.TryParse(fields[5], out _, out _)))
+                continue;
             var map = new ColumnMapping { HeaderRowIndex = r };
             var score = 0;
             for (var c = 0; c < rows[r].Length; c++)
@@ -39,13 +45,27 @@ public static class ColumnMapper
                 var h = Normalize(rows[r][c]);
                 if (h.Length == 0) continue;
 
-                if (map.AttTime is null && TimeAliases.Any(a => h == a || h.Contains(a))) { map.AttTime = c; score += 3; continue; }
+                if (map.AttTime is null && TimeAliases.Contains(h)) { map.AttTime = c; score += 3; continue; }
                 // Device ID يُفحص قبل ID. لأن "deviceid" يحتوي على "id"
-                if (map.DeviceId is null && DeviceAliases.Any(a => h == a || h.Contains(a))) { map.DeviceId = c; score += 2; continue; }
-                if (map.EmployeeCode is null && CodeAliases.Any(a => h == a || h.Contains(a))) { map.EmployeeCode = c; score += 3; continue; }
-                if (map.AttType is null && TypeAliases.Any(a => h == a || h.Contains(a))) { map.AttType = c; score += 2; continue; }
-                if (map.Name is null && NameAliases.Any(a => h == a || h.Contains(a))) { map.Name = c; score += 1; continue; }
-                if (map.No is null && NoAliases.Any(a => h == a || h.Contains(a))) { map.No = c; score += 1; continue; }
+                if (map.DeviceId is null && DeviceAliases.Contains(h)) { map.DeviceId = c; score += 2; continue; }
+                if (map.EmployeeCode is null && CodeAliases.Contains(h)) { map.EmployeeCode = c; score += 3; continue; }
+                if (map.AttType is null && TypeAliases.Contains(h)) { map.AttType = c; score += 2; continue; }
+                if (map.Name is null && NameAliases.Contains(h)) { map.Name = c; score += 1; continue; }
+                if (map.No is null && NoAliases.Contains(h)) { map.No = c; score += 1; continue; }
+            }
+
+            if (map.IsUsable)
+            {
+                map.IsZkExport = rows[r].Length == 8 && map.EmployeeCode == 0 && map.AttTime == 1
+                    && map.Name == 4 && map.AttType == 5;
+                if (map.IsZkExport) map.ExpectedColumnCount = 8;
+                // Concatenated exports may repeat their header after data. A later
+                // header must never hide real punches appearing before it.
+                if (rows.Take(r).Any(prior => map.EmployeeCode!.Value < prior.Length
+                    && map.AttTime!.Value < prior.Length
+                    && !string.IsNullOrWhiteSpace(prior[map.EmployeeCode.Value])
+                    && PunchTimeParser.TryParse(prior[map.AttTime.Value], out _, out _)))
+                    map.HeaderRowIndex = -1;
             }
 
             if (map.IsUsable && score > bestScore)
@@ -61,18 +81,19 @@ public static class ColumnMapper
     /// <summary>خريطة احتياطية بالترتيب الافتراضي للأعمدة في تقرير الجهاز.</summary>
     public static ColumnMapping Fallback(IReadOnlyList<string[]> rows)
     {
-        var header = rows.Count > 0 ? rows[0] : Array.Empty<string>();
-        var map = new ColumnMapping { HeaderRowIndex = 0 };
-        for (var c = 0; c < header.Length; c++)
-        {
-            if (map.No is null && c == 0) { map.No = c; continue; }
-            if (map.DeviceId is null && c == 1) { map.DeviceId = c; continue; }
-            if (map.EmployeeCode is null && c == 2) { map.EmployeeCode = c; continue; }
-            if (map.Name is null && c == 3) { map.Name = c; continue; }
-            if (map.AttType is null && c == 4) { map.AttType = c; continue; }
-            if (map.AttTime is null && c == 5) { map.AttTime = c; continue; }
-        }
-        return map;
+        var zk = ZkAttendanceFormatDetector.Detect(rows);
+        if (zk is not null) return zk;
+
+        // Recognize the legacy layout from data, rather than assigning arbitrary columns.
+        if (rows.Any(row => row.Length == 6 && !string.IsNullOrWhiteSpace(row[2])
+            && PunchTimeParser.TryParse(row[5], out _, out _)))
+            return new ColumnMapping
+            {
+                HeaderRowIndex = -1, No = 0, DeviceId = 1, EmployeeCode = 2,
+                Name = 3, AttType = 4, AttTime = 5, ExpectedColumnCount = 6
+            };
+
+        return new ColumnMapping { HeaderRowIndex = -1 };
     }
 }
 
@@ -102,6 +123,15 @@ public static class PunchTimeParser
 
         var text = raw.Trim().Trim('"');
 
+        // Device records are local wall-clock timestamps. A zone suffix must not
+        // cause DateTime.TryParse to silently convert them using the IIS timezone.
+        if (System.Text.RegularExpressions.Regex.IsMatch(text, @"(?:[zZ]|[+-]\d{2}:?\d{2}|\bUTC|\bGMT)$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+        {
+            error = "الوقت يحتوي على منطقة زمنية؛ يلزم تأكيد توقيت الجهاز المحلي قبل الاستيراد";
+            return false;
+        }
+
         // رقم تسلسلي لتاريخ Excel
         if (double.TryParse(text, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var oa)
             && oa > 1 && oa < 2958466)
@@ -116,9 +146,34 @@ public static class PunchTimeParser
                 ? System.Globalization.CultureInfo.InvariantCulture
                 : System.Globalization.CultureInfo.GetCultureInfo(cultureName);
             if (DateTime.TryParseExact(text, Formats, culture, System.Globalization.DateTimeStyles.None, out value))
+            {
+                value = DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
                 return true;
-            if (DateTime.TryParse(text, culture, System.Globalization.DateTimeStyles.None, out value))
+            }
+            // A partial date or time must not acquire the server's current day/year.
+            // Retain explicit two-digit numeric years supported by legacy exports.
+            var explicitYear = System.Text.RegularExpressions.Regex.IsMatch(text, @"(?<!\d)\d{4}(?!\d)")
+                || System.Text.RegularExpressions.Regex.IsMatch(text, @"\d{1,2}[-/.]\d{1,2}[-/.]\d{2}(?:\D|$)");
+            if (!explicitYear)
+            {
+                error = "التاريخ غير مكتمل؛ يجب أن يتضمن اليوم والشهر والسنة مع وقت البصمة";
+                return false;
+            }
+            if (DateTime.TryParse(text, culture, System.Globalization.DateTimeStyles.NoCurrentDateDefault, out value))
+            {
+                if (value.Date == DateTime.MinValue.Date)
+                {
+                    error = "وقت البصمة لا يتضمن تاريخاً صالحاً";
+                    return false;
+                }
+                if (value.Kind != DateTimeKind.Unspecified)
+                {
+                    error = "الوقت يحتوي على منطقة زمنية؛ يلزم تأكيد توقيت الجهاز المحلي قبل الاستيراد";
+                    return false;
+                }
+                value = DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
                 return true;
+            }
         }
 
         error = "تعذّر تحويل التاريخ/الوقت: " + raw;

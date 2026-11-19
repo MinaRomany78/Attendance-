@@ -146,7 +146,7 @@ else
                                 <thead>
                                 <tr>
                                     <th>كود الموظف</th><th>اسم الموظف</th><th>سجلات الحضور</th>
-                                    <th>أيام حضور</th><th>أيام غياب</th><th>دقائق التأخير</th><th>إضافي معتمد (ساعة)</th>
+                                    <th>أيام حضور</th><th>أيام غياب</th><th>تأخير وفق السماح (ساعة)</th><th>إضافي معتمد (ساعة)</th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -158,8 +158,8 @@ else
                                         <td class="num">@e.AttendanceRecords</td>
                                         <td class="num">@e.PresentRecords</td>
                                         <td class="num">@e.AbsentRecords</td>
-                                        <td class="num">@e.LateMinutes</td>
-                                        <td class="num">@e.ApprovedOvertimeHours</td>
+                                        <td class="num">@e.LateHours.ToString("0.##")</td>
+                                        <td class="num">@e.ApprovedOvertimeHours.ToString("0.##")</td>
                                     </tr>
                                 }
                                 </tbody>

@@ -1,4 +1,6 @@
 using HrPayroll.Domain.Enums;
+using HrPayroll.Domain.Models;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace HrPayroll.Domain.Entities;
 
@@ -54,6 +56,7 @@ public class PayrollItem : BaseEntity
     public decimal AnnualLeaveBalanceApplied { get; set; }
 
     public int LateMinutes { get; set; }
+    public int? EarlyLeaveMinutes { get; set; }
 
     // ===== الإضافي =====
     public int RawOvertimeMinutes { get; set; }
@@ -68,11 +71,19 @@ public class PayrollItem : BaseEntity
 
     // ===== الخصومات =====
     public decimal LateDeduction { get; set; }
+    public decimal? EarlyLeaveDeduction { get; set; }
+    public decimal? ShortageDeduction { get; set; }
     public decimal AbsenceDeduction { get; set; }
     public decimal UnpaidLeaveDeduction { get; set; }
 
     /// <summary>السلف (اسم تاريخي محفوظ للتوافق).</summary>
     public decimal LoansTotal { get; set; }
+    public decimal? SalaryAdvancesPaid { get; set; }
+    public decimal? LoanInstallments { get; set; }
+    public decimal? LegacyLoanDeductions { get; set; }
+    public decimal? EmployeeExpenseRecoveries { get; set; }
+    public decimal? SystemFinancialDeductions => SalaryAdvancesPaid.HasValue
+        ? SalaryAdvancesPaid + (LoanInstallments ?? 0) + (LegacyLoanDeductions ?? 0) : null;
 
     public decimal DeductionsTotal { get; set; }
 
@@ -93,6 +104,16 @@ public class PayrollItem : BaseEntity
     public decimal GrossEarnings { get; set; }
     public decimal TotalDeductions { get; set; }
     public decimal NetSalary { get; set; }
+    public decimal UncoveredDeductions { get; set; }
+    public decimal? ContractBasicSalary { get; set; }
+    public decimal? PayableBasicDays { get; set; }
+    public string? FinancialReviewReason { get; set; }
+    public DateTime? EarningsAsOf { get; set; }
+    public decimal? EarnedBasicSalary { get; set; }
+    public decimal? EarnedGrossSalary { get; set; }
+    public decimal? EarnedDeductions { get; set; }
+    public decimal? EarnedNetSalary { get; set; }
+    public int? AttendanceMissingDays { get; set; }
 
     /// <summary>الإجمالي قبل الخصومات (يحفظ للتوافق: الراتب + الإضافي + الإضافات).</summary>
     public decimal GrossSalary { get; set; }
@@ -109,6 +130,16 @@ public class PayrollItem : BaseEntity
 
     /// <summary>تفاصيل الحساب خطوة بخطوة (JSON) لأغراض المراجعة والتدقيق.</summary>
     public string? CalculationDetails { get; set; }
+
+    [NotMapped] public decimal ActualLateHours => PayrollDurationSnapshot.Read(this).ActualLateMinutes / 60m;
+    [NotMapped] public decimal? ActualEarlyDepartureHours => PayrollDurationSnapshot.Read(this).ActualEarlyDepartureMinutes / 60m;
+    [NotMapped] public decimal? ActualMissingHours => PayrollDurationSnapshot.Read(this).ActualMissingMinutes / 60m;
+    [NotMapped] public decimal? RoundedDurationHours => PayrollDurationSnapshot.Read(this).RoundedDurationHours;
+    [NotMapped] public decimal ChargeableHours => PayrollDurationSnapshot.Read(this).ChargeableHours;
+    [NotMapped] public string AttendanceDeductionBasisText => PayrollDurationSnapshot.Read(this).BasisText;
+    [NotMapped] public string DurationPolicyDescription => PayrollDurationSnapshot.Read(this).Description;
+    [NotMapped] public decimal AttendanceDeductions => LateDeduction + (EarlyLeaveDeduction ?? 0m) + (ShortageDeduction ?? 0m);
+    [NotMapped] public bool IsProvisional => Status is not (PayrollStatus.Approved or PayrollStatus.Locked);
 
     public ICollection<Loan> Loans { get; set; } = new List<Loan>();
     public ICollection<Deduction> Deductions { get; set; } = new List<Deduction>();

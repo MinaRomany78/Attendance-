@@ -26,7 +26,7 @@ public class AdvanceEligibilityTests
 
     private static SalaryAdvanceService Service(AppDbContext ctx)
         => new(ctx, new SettingsService(ctx), new AuditService(ctx),
-            NullLogger<SalaryAdvanceService>.Instance);
+            NullLogger<SalaryAdvanceService>.Instance, new AdvanceTestClock(new DateTimeOffset(2024,10,15,18,0,0,TimeSpan.Zero)));
 
     private static void AddWorkDays(AppDbContext ctx, DateTime from, DateTime to)
     {
@@ -52,9 +52,9 @@ public class AdvanceEligibilityTests
     [Theory]
     [InlineData(14, true)]   // قبل الاستحقاق: مسموح
     [InlineData(15, true)]   // يوم الاستحقاق نفسه: مسموح (سياسة الشركة)
-    [InlineData(16, false)]  // بعد الاستحقاق: مرفوض
-    [InlineData(20, false)]  // بعد الاستحقاق: مرفوض
-    public async Task Cutoff_Day_Is_Enforced_Including_The_Fifteenth(int day, bool allowed)
+    [InlineData(16, true)]  // بعد الاستحقاق: مرفوض
+    [InlineData(20, true)]  // بعد الاستحقاق: مرفوض
+    public async Task Advances_Are_Allowed_Throughout_The_Month(int day, bool allowed)
     {
         var (db, ctx) = Seed();
         using var _ = db;
@@ -91,7 +91,7 @@ public class AdvanceEligibilityTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => Service(ctx).CalculateAsync(1, 2024, 10, new DateTime(2024, 11, 10)));
 
-        Assert.Contains("شهر السلفة", ex.Message);
+        Assert.Contains("الشهر", ex.Message);
         Assert.Empty(await ctx.SalaryAdvances.ToListAsync());
     }
 

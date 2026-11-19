@@ -18,6 +18,7 @@ public sealed class ParsedSheet
     public required List<string[]> Rows { get; init; }
     public int ColumnCount { get; init; }
     public string? SheetName { get; init; }
+    public string? EncodingName { get; init; }
 }
 
 /// <summary>صف بصمة خام بعد التحليل.</summary>
@@ -28,10 +29,12 @@ public sealed class ParsedPunchRow
     public string? DeviceEmployeeCode { get; set; }
     public string? Name { get; set; }
     public string? AttType { get; set; }
+    public string? NormalizedAttType { get; set; }
     public string? RawPunchTime { get; set; }
     public DateTime? PunchTime { get; set; }
     public bool IsTimeValid { get; set; }
     public string? ValidationMessage { get; set; }
+    public string[] OriginalFields { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>خريطة الأعمدة المكتشفة.</summary>
@@ -44,6 +47,9 @@ public sealed class ColumnMapping
     public int? AttType { get; set; }
     public int? AttTime { get; set; }
     public int HeaderRowIndex { get; set; }
+    /// <summary>Only set for a positively identified layout; unknown metadata stays unmapped.</summary>
+    public int? ExpectedColumnCount { get; set; }
+    public bool IsZkExport { get; set; }
 
     public bool IsUsable => EmployeeCode.HasValue && AttTime.HasValue;
 }

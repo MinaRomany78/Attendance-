@@ -113,6 +113,7 @@ public class PayrollSheetService
     {
         var result = new PayrollSheetSaveResult();
 
+        await using var transaction = await _db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         var run = await _db.PayrollRuns.FirstOrDefaultAsync(r => r.Id == payrollRunId, ct)
                   ?? throw new InvalidOperationException("كشف الرواتب غير موجود.");
 
@@ -121,8 +122,11 @@ public class PayrollSheetService
                 $"لا يمكن تعديل كشف بحالة \"{ExcelExportService.PayrollStatusText(run.Status)}\". " +
                 "أعد فتح الكشف بسبب مُسجَّل (أو احتسبه) قبل التعديل.");
 
+        await PayrollFinancialEvidence.EnsureCurrentAsync(_db,run,ct);
+        if (edits.Select(e => e.PayrollItemId).Distinct().Count() != edits.Count)
+            throw new InvalidOperationException("لا يمكن إرسال تعديلين لنفس سطر المرتبات في الطلب الواحد.");
         var policy = await _settings.GetPolicyAsync(ct);
-        var workingDaysInPeriod = await CountWorkingDaysAsync(run.Year, run.Month, ct);
+        var workingDaysInPeriod = await CountWorkingDaysAsync(PayrollPeriod.ForRun(run), ct);
 
         var ids = edits.Select(e => e.PayrollItemId).Distinct().ToList();
         var items = await _db.PayrollItems
@@ -146,7 +150,8 @@ public class PayrollSheetService
         {
             await _db.SaveChangesAsync(ct);
 
-            var all = await _db.PayrollItems.Where(i => i.PayrollRunId == payrollRunId).ToListAsync(ct);
+            var all = await _db.PayrollItems.AsNoTracking().Where(i => i.PayrollRunId == payrollRunId)
+                .Select(i => new { i.NetSalary, i.GrossEarnings, i.OvertimeAmount, i.TotalDeductions, i.Bonuses, i.Allowances }).ToListAsync(ct);
             run.TotalNet = all.Sum(i => i.NetSalary);
             run.TotalGross = all.Sum(i => i.GrossEarnings);
             run.TotalOvertime = all.Sum(i => i.OvertimeAmount);
@@ -162,6 +167,7 @@ public class PayrollSheetService
             result.TotalOvertime = run.TotalOvertime;
         }
 
+        await transaction.CommitAsync(ct);
         return result;
     }
 
@@ -169,6 +175,9 @@ public class PayrollSheetService
         PayrollItem item, PayrollRun run, PayrollRowEdit edit, AttendancePolicy policy,
         decimal workingDaysInPeriod, bool allowOverdraft, string? user, string? userId)
     {
+        if (item.FinancialReviewReason != null) throw new InvalidOperationException(item.FinancialReviewReason);
+        var deferredDeductions = item.EarnedDeductions.HasValue
+            ? Math.Max(0, item.TotalDeductions - item.AbsenceDeduction - item.UnpaidLeaveDeduction - item.EarnedDeductions.Value) : 0m;
         var row = new PayrollRowResult
         {
             PayrollItemId = item.Id,
@@ -198,9 +207,13 @@ public class PayrollSheetService
         var annualLeaveDays = edit.AnnualLeaveDays ?? item.AnnualLeaveDays;
         var unpaidLeaveDays = edit.OtherUnpaidLeaveDays ?? item.UnpaidLeaveDays;
         var overtimeHours = edit.OvertimeHours ?? item.ManualOvertimeHours ?? item.ApprovedOvertimeHours;
+        var overtimeChanged = edit.OvertimeHours.HasValue
+            && edit.OvertimeHours.Value != (item.ManualOvertimeHours ?? item.ApprovedOvertimeHours);
         var bonuses = edit.Bonuses ?? item.Bonuses;
         var allowances = edit.Allowances ?? item.Allowances;
         var advances = edit.Advances ?? item.LoansTotal;
+        if (item.SystemFinancialDeductions.HasValue && advances != item.LoansTotal)
+            throw new InvalidOperationException("السلف والقروض المسجلة تلقائياً غير قابلة للتحرير من كشف الرواتب؛ استخدم المستند المالي الأصلي.");
         var otherDeductions = edit.OtherDeductions ?? item.OtherDeductions;
         var extraDays = edit.ExtraDays ?? item.AdditionalDaysCount;
         var extraDaysRate = edit.ExtraDaysRate ?? item.AdditionalDaysRate;
@@ -255,7 +268,7 @@ public class PayrollSheetService
         var availableForThisRow = (employee?.AnnualLeaveBalance ?? 0m) + alreadyApplied;
         var additionalNeeded = annualLeaveDays - alreadyApplied;
 
-        if (additionalNeeded > availableForThisRow + 0.0001m)
+        if (annualLeaveDays > availableForThisRow + 0.0001m)
         {
             var warning = $"رصيد الإجازة السنوية المتاح للموظف {availableForThisRow:0.##} يوم فقط، " +
                           $"والمطلوب خصمه لهذا السطر {annualLeaveDays:0.##} يوم (فرق {additionalNeeded:0.##} يوم).";
@@ -270,21 +283,32 @@ public class PayrollSheetService
         }
 
         // ---------- 3) إعادة الحساب على السيرفر بالمعادلات المعتمدة ----------
-        var approvedMinutes = (int)Math.Round(overtimeHours * 60m, MidpointRounding.AwayFromZero);
-        var paidMinutes = item.ManualOvertimeHours.HasValue || edit.OvertimeHours.HasValue
+        var approvedMinutes = overtimeChanged ? HourDurationCalculator.InputHoursToMinutes(overtimeHours)
+            : (int)PayrollSnapshotReader.Number(item, "overtime", "approvedMinutes", HourDurationCalculator.InputHoursToMinutes(overtimeHours));
+        var paidMinutes = overtimeChanged
             ? approvedMinutes
-            : (int)Math.Round(item.PaidOvertimeHours * 60m, MidpointRounding.AwayFromZero);
+            : (int)PayrollSnapshotReader.Number(item, "overtime", "paidMinutes", HourDurationCalculator.InputHoursToMinutes(item.PaidOvertimeHours));
 
         var inputs = new PayrollInputs
         {
             BasicSalary = item.BasicSalary,
+            AllowNegativeNetSalary = run.PeriodStart.HasValue,
             DailyRateOverride = item.DailyRate > 0 ? item.DailyRate : null,
-            StandardWorkHours = item.WorkHoursPerDay,
+            StandardWorkHours = PayrollSnapshotReader.Number(item, "rates", "standardWorkHours", item.WorkHoursPerDay),
+            HourlyRateOverride = item.HourlyRate,
+            MinuteRateOverride = item.MinuteRate,
             LateMinutes = item.LateMinutes,
-            // القيمة الخام لا تُنقص الإضافي المعتمد يدويًا: نرفع الخام إلى المعتمد عند التعديل اليدوي.
-            RawOvertimeMinutes = Math.Max(item.RawOvertimeMinutes, approvedMinutes),
+            EarlyLeaveMinutes = item.EarlyLeaveMinutes ?? 0,
+            RawOvertimeMinutes = item.RawOvertimeMinutes,
             ApprovedOvertimeMinutes = approvedMinutes,
             PaidOvertimeMinutes = paidMinutes,
+            HasExplicitPaidOvertimeMinutes = true,
+            SavedAttendanceDeduction = item.LateDeduction,
+            SavedEarlyLeaveDeduction = item.EarlyLeaveDeduction ?? 0,
+            SavedShortageDeduction = item.ShortageDeduction ?? 0,
+            DurationSnapshotOverride = PayrollDurationSnapshot.Read(item),
+            SavedOvertimeAmount = overtimeChanged ? null : item.OvertimeAmount,
+            SavedPaidOvertimeHours = overtimeChanged ? null : PayrollSnapshotReader.Number(item, "overtime", "paidHours", item.PaidOvertimeHours),
             AttendanceDays = item.AttendanceDays,
             PaidRestDays = item.PaidRestDays,
             PaidLeaveDays = item.PaidLeaveDays,
@@ -300,17 +324,21 @@ public class PayrollSheetService
             OvertimeMultiplier = item.OvertimeMultiplier <= 0 ? 1m : item.OvertimeMultiplier
         };
 
-        var c = PayrollCalculator.Compute(inputs, policy);
+        PayrollComputation c;
+        try { c = PayrollCalculator.Compute(inputs, PayrollSnapshotReader.Policy(item, policy)); }
+        catch (InvalidOperationException ex) { row.Error = ex.Message; return row; }
 
         // ---------- 4) تثبيت القيم على السطر ----------
         item.AbsenceDays = c.AbsenceDays;
         item.AnnualLeaveDays = annualLeaveDays;
         item.UnpaidLeaveDays = c.UnpaidLeaveDays;
-        item.ManualOvertimeHours = overtimeHours;
+        if (overtimeChanged) item.ManualOvertimeHours = overtimeHours;
         item.ApprovedOvertimeHours = c.ApprovedOvertimeHours;
         item.PaidOvertimeHours = c.PaidOvertimeHours;
         item.OvertimeAmount = c.OvertimeAmount;
         item.LateDeduction = c.LateDeduction;
+        item.EarlyLeaveDeduction = c.EarlyLeaveDeduction;
+        item.ShortageDeduction = c.ShortageDeduction;
         item.AbsenceDeduction = c.AbsenceDeduction;
         item.UnpaidLeaveDeduction = c.UnpaidLeaveDeduction;
         item.Bonuses = c.Bonuses;
@@ -324,6 +352,14 @@ public class PayrollSheetService
         item.GrossSalary = c.GrossSalary;
         item.TotalDeductions = c.TotalDeductions;
         item.NetSalary = c.NetSalary;
+        item.UncoveredDeductions = Math.Max(0,c.TotalDeductions-c.GrossEarnings);
+        if (item.EarnedBasicSalary.HasValue)
+        {
+            item.EarnedGrossSalary = PayrollCalculator.Round2(item.EarnedBasicSalary.Value + c.OvertimeAmount + c.Bonuses + c.Allowances + c.AdditionalDaysAmount);
+            item.EarnedDeductions = PayrollCalculator.Round2(Math.Max(0, c.TotalDeductions - c.AbsenceDeduction - c.UnpaidLeaveDeduction - deferredDeductions));
+            item.EarnedNetSalary = item.EarnedGrossSalary - item.EarnedDeductions;
+        }
+
         item.CalculationDetails = c.CalculationDetails;
         item.IsManuallyAdjusted = true;
         item.LastEditedAt = DateTime.UtcNow;
@@ -391,13 +427,12 @@ public class PayrollSheetService
     }
 
     /// <summary>أيام العمل في الشهر (باستثناء أيام الراحة الأسبوعية) — سقف قواعد التحقق.</summary>
-    private async Task<decimal> CountWorkingDaysAsync(int year, int month, CancellationToken ct)
+    private async Task<decimal> CountWorkingDaysAsync(PayrollPeriod period, CancellationToken ct)
     {
         var rest = await _settings.GetWeeklyRestDaysAsync(ct);
-        var days = DateTime.DaysInMonth(year, month);
         var count = 0m;
-        for (var d = 1; d <= days; d++)
-            if (!rest.Contains(new DateTime(year, month, d).DayOfWeek)) count += 1m;
+        for (var d = period.Start; d <= period.End; d = d.AddDays(1))
+            if (!rest.Contains(d.DayOfWeek)) count += 1m;
         return Math.Max(1m, count);
     }
 }

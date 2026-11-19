@@ -5,6 +5,7 @@
     var d = Model.Daily;
     ViewData["Title"] = "تصحيح سجل حضور";
 }
+<div class="page-header"><div><span class="eyebrow">الحضور / تصحيح السجل</span><h1>تصحيح وقت الحضور</h1><p>صحّح الدخول أو الخروج. تُعاد حسابات العمل والتأخير والانصراف المبكر تلقائياً عند الحفظ.</p></div><span class="period-pill">@d.WorkDate.ToString("yyyy-MM-dd")</span></div>
 <div class="card">
     <div class="card-head">
         <div>
@@ -20,8 +21,12 @@
             <div class="def"><div class="k">الدخول الحالي</div><div class="v">@(d.CheckInTime?.ToString("yyyy-MM-dd HH:mm") ?? "—")</div></div>
             <div class="def"><div class="k">الخروج الحالي</div><div class="v">@(d.CheckOutTime?.ToString("yyyy-MM-dd HH:mm") ?? "—")</div></div>
             <div class="def"><div class="k">الحالة الحالية</div><div class="v"><partial name="_StatusBadge" model="d.Status" /></div></div>
-            <div class="def"><div class="k">الإضافي الخام</div><div class="v">@d.RawOvertimeMinutes دقيقة</div></div>
-            <div class="def"><div class="k">الإضافي المعتمد</div><div class="v">@d.ApprovedOvertimeMinutes دقيقة</div></div>
+            <div class="def"><div class="k">ساعات العمل الفعلية</div><div class="v">@d.ActualWorkedHours.ToString("0.##") ساعة</div></div>
+            <div class="def"><div class="k">التأخير الفعلي</div><div class="v">@d.ActualLateHours.ToString("0.##") ساعة</div></div>
+            <div class="def"><div class="k">الانصراف المبكر الفعلي</div><div class="v">@d.ActualEarlyLeaveHours.ToString("0.##") ساعة</div></div>
+            <div class="def"><div class="k">النقص في ساعات الوردية</div><div class="v">@(d.ActualMissingHours?.ToString("0.##") ?? "غير محسوم") ساعة</div></div>
+            <div class="def"><div class="k">الإضافي الخام</div><div class="v">@HourDurationCalculator.DisplayHours(d.RawOvertimeMinutes) ساعة</div></div>
+            <div class="def"><div class="k">الإضافي المعتمد</div><div class="v">@HourDurationCalculator.DisplayHours(d.ApprovedOvertimeMinutes) ساعة</div></div>
             <div class="def"><div class="k">تصحيح يدوي سابق؟</div><div class="v">@(d.IsManualOverride ? "نعم" : "لا")</div></div>
         </div>
 
@@ -29,7 +34,7 @@
             <span>البصمات الخام تبقى محفوظة كما وردت من الجهاز، والتصحيح يُسجَّل مع القيمة الأصلية والمصححة والسبب والمستخدم والوقت.</span>
         </div>
 
-        <form method="post" asp-action="Correct" asp-route-id="@d.Id">
+        <form method="post" asp-action="Correct" asp-route-id="@d.Id" data-correction-preview data-shift-start="@d.ShiftStart.ToString("yyyy-MM-ddTHH:mm")" data-shift-end="@d.ShiftEnd.ToString("yyyy-MM-ddTHH:mm")" data-loading-text="جاري حفظ التصحيح وإعادة الحساب...">
             <div asp-validation-summary="ModelOnly" class="alert alert-danger" style="display:@(ViewData.ModelState.ErrorCount > 0 ? "flex" : "none")"></div>
             <div class="form-grid">
                 <div class="field">
@@ -41,13 +46,14 @@
                     <input type="datetime-local" name="CheckOut" value="@(Model.CheckOut?.ToString("yyyy-MM-ddTHH:mm"))" />
                 </div>
                 <div class="field">
-                    <label>الحالة</label>
-                    <select name="Status" asp-items="Model.StatusList"></select>
+                    <label>تجاوز الحالة المشتقة (اختياري)</label>
+                    <label><input type="checkbox" name="OverrideStatus" value="true" checked="@Model.OverrideStatus" /> اعتماد الحالة المحددة يدويًا بدل الحالة المشتقة</label>
+                    <select name="Status" asp-items="Model.StatusList"><option value="">اشتقاق تلقائي من الأوقات</option></select>
                 </div>
                 <div class="field">
-                    <label>الإضافي المعتمد (دقيقة)</label>
-                    <input type="number" name="ApprovedOvertimeMinutes" min="0" value="@Model.ApprovedOvertimeMinutes" />
-                    <span class="hint">لا يمكن أن يتجاوز الإضافي الخام (@d.RawOvertimeMinutes دقيقة).</span>
+                    <label>الإضافي المعتمد (ساعة)</label>
+                    <input type="number" name="ApprovedOvertimeHours" min="0" step="any" value="@Model.ApprovedOvertimeHours?.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
+                    <span class="hint">لا يمكن أن يتجاوز الإضافي الخام (@HourDurationCalculator.DisplayHours(d.RawOvertimeMinutes) ساعة). اتركه فارغًا للإبقاء على الاعتماد الحالي.</span>
                 </div>
                 <div class="field span-2">
                     <label>سبب التصحيح (مطلوب)</label>
@@ -62,14 +68,23 @@
                     </select>
                 </div>
             </div>
+            <div class="section-title">معاينة الأوقات المصححة</div>
+            <div class="correction-preview" aria-live="polite">
+                <div class="metric"><div class="k">التأخير الخام</div><div class="v" data-preview-late>—</div><div class="meta">دقيقة من بداية الوردية</div></div>
+                <div class="metric"><div class="k">الانصراف المبكر الخام</div><div class="v" data-preview-early>—</div><div class="meta">دقيقة حتى نهاية الوردية</div></div>
+                <div class="metric"><div class="k">العمل الفعلي</div><div class="v" data-preview-worked>—</div><div class="meta">دقيقة بين الدخول والخروج</div></div>
+                <div class="metric"><div class="k">الوقت غير المغطى</div><div class="v" data-preview-missing>—</div><div class="meta">دقيقة داخل حدود الوردية</div></div>
+            </div>
+            <p class="hint">المعاينة قياس للوقت الخام. الخصم المالي يتبع سياسة الشركة وفترة السماح المحفوظة؛ لا يغيّر التصحيح البصمة الأصلية.</p>
             <div class="btn-row" style="margin-top:16px">
                 <button type="submit" class="btn btn-primary btn-lg"
-                        data-confirm="تأكيد تصحيح سجل الحضور؟">حفظ التصحيح</button>
+                        >حفظ التصحيح وإعادة الحساب</button>
                 <a class="btn btn-ghost btn-lg" asp-action="Index" asp-route-from="@d.WorkDate.ToString("yyyy-MM-dd")" asp-route-to="@d.WorkDate.ToString("yyyy-MM-dd")">إلغاء</a>
             </div>
         </form>
     </div>
 </div>
+@section Scripts{<script src="~/js/attendance-correction.js" asp-append-version="true"></script>}
 
 <div class="card">
     <div class="card-head"><h3>سجل التصحيحات على هذا اليوم (@Model.History.Count)</h3></div>

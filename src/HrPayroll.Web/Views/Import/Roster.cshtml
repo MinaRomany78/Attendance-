@@ -1,0 +1,33 @@
+@model HrPayroll.Infrastructure.Import.RosterReconciliationResult
+@{ ViewData["Title"] = "مطابقة قائمة موظفي جهاز البصمة"; }
+<link rel="stylesheet" href="~/css/attendance-import.css" asp-append-version="true" />
+<div class="attendance-import" dir="rtl">
+    <div class="page-hero"><div class="page-hero-body"><h1>مطابقة قائمة موظفي جهاز البصمة</h1><p class="sub">مقارنة للقراءة فقط حسب كود البصمة. تُعرض اختلافات الأسماء للمراجعة دون تعديل بيانات الموظفين.</p></div><a class="btn btn-ghost" asp-action="Index">إدارة البصمات</a></div>
+    <section class="card"><div class="card-body">
+        <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+        <form method="post" enctype="multipart/form-data" asp-action="Roster">
+            <label for="rosterFile">قائمة موظفي الجهاز (Excel أو TXT أو CSV)</label>
+            <input type="file" id="rosterFile" name="rosterFile" required accept=".xlsx,.xls,.csv,.txt,.xml,.tsv" />
+            <p class="import-help">يجب أن يحتوي الملف على صف عناوين: كود البصمة والاسم، أو User ID وName. يمكن استخدام قالب الموظفين الحالي للمقارنة. الحد الأقصى 25 ميجابايت.</p>
+            <button type="submit" class="btn btn-primary">مقارنة القائمة</button>
+        </form>
+    </div></section>
+    @if (Model.Analyzed)
+    {
+        <div class="import-summary">
+            <div class="import-metric"><span>موظفو النظام</span><strong>@Model.SystemEmployees</strong></div>
+            <div class="import-metric"><span>صفوف قائمة الجهاز</span><strong>@Model.DeviceRows</strong></div>
+            <div class="import-metric"><span>أكواد الجهاز الفريدة</span><strong>@Model.UniqueDeviceCodes</strong></div>
+            <div class="import-metric valid"><span>مطابق</span><strong>@Model.Rows.Count(r => r.Status == "matched")</strong></div>
+            <div class="import-metric review"><span>اختلافات للمراجعة</span><strong>@Model.Rows.Count(r => r.Status != "matched")</strong></div>
+        </div>
+        <section class="card"><div class="card-body"><label for="rosterSearch">البحث في نتائج المقارنة</label><input id="rosterSearch" type="search" data-table-filter="#rosterResults" placeholder="كود، اسم أو رسالة" /></div>
+            <div class="table-wrap"><table id="rosterResults" class="data import-table"><thead><tr><th scope="col">الصف</th><th scope="col">كود البصمة</th><th scope="col">الاسم بالجهاز</th><th scope="col">الموظف بالنظام</th><th scope="col">النتيجة</th></tr></thead><tbody>
+            @foreach (var row in Model.Rows)
+            {
+                <tr><td>@(row.RowNumber == 0 ? "—" : row.RowNumber)</td><td><bdi>@row.Code</bdi></td><td>@(row.DeviceName ?? "—")</td><td>@(row.SystemName ?? "—")</td><td><span class="import-status @(row.Status == "matched" ? "valid" : "review")">@row.Message</span></td></tr>
+            }
+            </tbody></table></div>
+        </section>
+    }
+</div>

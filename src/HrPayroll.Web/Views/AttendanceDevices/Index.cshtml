@@ -1,0 +1,59 @@
+@model HrPayroll.Web.ViewModels.AttendanceDeviceViewModel
+@{
+    ViewData["Title"] = "إعداد أجهزة البصمة";
+}
+<div class="page-header">
+    <div><h1>إعداد أجهزة البصمة</h1><p class="text-muted">احفظ إعدادات الشبكة والطراز تمهيداً لإضافة برنامج تشغيل موثّق ومتوافق.</p></div>
+    <a asp-controller="Import" asp-action="Index" class="btn btn-outline-secondary">إدارة واستيراد البصمات</a>
+</div>
+<div class="alert alert-info" role="status">
+    لا يوجد برنامج تشغيل جهاز مفعّل حالياً. حفظ الإعدادات لا يختبر الاتصال ولا ينزّل السجلات.
+    يجب تأكيد الطراز والبروتوكول ونسخة SDK ومعمارية Windows/IIS، مع وصول الخادم أو خدمة المزامنة إلى الجهاز عبر الشبكة المحلية.
+</div>
+<div class="row g-4">
+    <section class="col-lg-5">
+        <div class="card p-4">
+            <h2 class="h5">@(Model.Id == 0 ? "إضافة جهاز" : "تعديل الجهاز")</h2>
+            <form asp-action="Save" method="post" autocomplete="off">
+                <input asp-for="Id" type="hidden" />
+<label>نوع الجهاز<select asp-for="Role"><option value="0">حدد الدور</option><option value="1">جهاز الدخول</option><option value="2">جهاز الخروج</option></select></label>
+                <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+                <div class="mb-3"><label asp-for="Name" class="form-label">اسم الجهاز</label><input asp-for="Name" class="form-control" maxlength="150" required /></div>
+                <div class="row g-3 mb-3">
+                    <div class="col-8"><label asp-for="IpAddress" class="form-label">عنوان IP</label><input asp-for="IpAddress" class="form-control" dir="ltr" placeholder="192.168.1.201" maxlength="45" required /></div>
+                    <div class="col-4"><label asp-for="TcpPort" class="form-label">منفذ TCP</label><input asp-for="TcpPort" class="form-control" type="number" min="1" max="65535" required /></div>
+                </div>
+                <div class="mb-3"><label asp-for="Model" class="form-label">طراز الجهاز</label><input asp-for="Model" class="form-control" maxlength="150" required /><small class="text-muted">كما يظهر على ملصق الجهاز؛ يحدد توافق البروتوكول.</small></div>
+                <div class="mb-3"><label asp-for="Identifier" class="form-label">معرّف الجهاز أو رقمه التسلسلي</label><input asp-for="Identifier" class="form-control" maxlength="150" /></div>
+                <div class="mb-3"><label asp-for="TimeZoneId" class="form-label">المنطقة الزمنية للجهاز</label><input asp-for="TimeZoneId" class="form-control" dir="ltr" maxlength="100" required /><small class="text-muted">تُحفظ أوقات الجهاز المحلية؛ لا تُحوّل بصمات مصر إلى UTC.</small></div>
+                <div class="mb-3"><label asp-for="CommunicationKey" class="form-label">مفتاح الاتصال عند دعمه</label><input asp-for="CommunicationKey" class="form-control" type="password" value="" autocomplete="new-password" maxlength="100" /><small class="text-muted">يُحفظ مشفراً. اتركه فارغاً للاحتفاظ بالمفتاح الحالي.</small></div>
+                <button type="submit" class="btn btn-primary">حفظ الإعدادات</button>
+                @if (Model.Id != 0) { <a asp-action="Index" class="btn btn-outline-secondary">إلغاء التعديل</a> }
+            </form>
+        </div>
+    </section>
+    <section class="col-lg-7">
+        <div class="card p-4">
+            <form asp-action="Synchronize" method="post" data-loading-text="جارٍ سحب بصمات الدخول والخروج..."><button type="submit" class="btn btn-primary">سحب البصمات من الجهازين</button></form>
+            @foreach(var role in new[] { AttendanceDeviceRole.Entry, AttendanceDeviceRole.Exit, AttendanceDeviceRole.Unspecified })
+            {
+                <h2>@(role == AttendanceDeviceRole.Entry ? "جهاز الدخول" : role == AttendanceDeviceRole.Exit ? "جهاز الخروج" : "أجهزة تحتاج تحديد الدور")</h2>
+                @foreach(var device in Model.Devices.Where(d => d.Role == role))
+                {
+                    <article class="card p-3">
+                        <h3>@device.Name</h3><p dir="ltr">@device.IpAddress:@device.TcpPort · @device.Model · @device.Identifier</p>
+                        <p>@device.ConnectionStatus · آخر مزامنة: @(device.LastSuccessfulSyncUtc?.ToString("yyyy-MM-dd HH:mm 'UTC'") ?? "لم تتم") · سجلات: @device.LastDownloadedCount</p>
+                        @if(device.LastSyncError != null){<p role="alert">@device.LastSyncError</p>}
+                        @if(!Model.SupportedDeviceIds.Contains(device.Id)){<p>برنامج تشغيل متوافق غير متاح؛ الاتصال الفعلي غير مفعّل.</p>}
+                        <a asp-action="Index" asp-route-id="@device.Id" class="btn">تعديل</a>
+                        <a asp-action="History" asp-route-id="@device.Id" class="btn">سجل المزامنة والمراجعة</a>
+                        <form asp-action="Test" method="post"><input name="id" type="hidden" value="@device.Id" /><button type="submit" class="btn">اختبار الاتصال</button></form>
+                        <form asp-action="Synchronize" method="post" data-loading-text="جارٍ سحب البصمات..."><input name="id" type="hidden" value="@device.Id" /><button type="submit" class="btn">مزامنة</button></form>
+                        <details><summary>ربط كود خاص بهذا الجهاز بموظف موجود</summary>
+                        <form asp-action="MapEmployee" method="post"><input type="hidden" name="deviceId" value="@device.Id" /><label>كود البصمة<input name="code" maxlength="50" required /></label><label>رقم الموظف الداخلي<input name="employeeId" type="number" min="1" required /></label><button type="submit" class="btn">حفظ الربط</button></form></details>
+                    </article>
+                }
+            }        </div>
+        <p class="text-muted small mt-3">لا يحتاج الاتصال المحلي إلى الإنترنت. عند إضافة برنامج تشغيل يجب تطبيق مهلات وإلغاء الطلبات وإغلاق الاتصال بأمان، مع عدم مسح سجلات الجهاز تلقائياً.</p>
+    </section>
+</div>

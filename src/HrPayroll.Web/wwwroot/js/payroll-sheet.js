@@ -14,6 +14,12 @@
     var runId = parseInt(table.dataset.runId, 10);
     var saveUrl = table.dataset.saveUrl;
     var breakdownUrl = table.dataset.breakdownUrl;
+    var columnsToggle = document.getElementById('sheetColumnsToggle');
+    if (columnsToggle) columnsToggle.addEventListener('click', function () {
+        var compact = table.classList.toggle('is-compact');
+        columnsToggle.setAttribute('aria-pressed', compact ? 'false' : 'true');
+        columnsToggle.textContent = compact ? 'عرض كل بنود الحساب' : 'العرض المختصر';
+    });
     var saveBtn = document.getElementById('saveBtn');
     var discardBtn = document.getElementById('discardBtn');
     var dirtyIndicator = document.getElementById('dirtyIndicator');
@@ -21,6 +27,8 @@
     var autoSaveToggle = document.getElementById('autoSaveToggle');
     var dirtyRows = new Set();
     var autoSaveTimer = null;
+    var saving = false;
+    var revisions = new Map();
 
     function toNum(v) {
         if (v === null || v === undefined) return 0;
@@ -55,53 +63,13 @@
     }
 
     /* ---------- المعاينة الفورية بنفس معادلات PayrollCalculator ---------- */
+    // Financial totals stay on the saved server snapshot until SaveAsync returns.
+    // Client formulas cannot reproduce configured duration policies and decimal arithmetic.
     function computeRow(tr) {
-        var dailyRate = toNum(tr.dataset.dailyRate);
-        var hourlyRate = toNum(tr.dataset.hourlyRate);
-        var minuteRate = toNum(tr.dataset.minuteRate);
-        var basic = toNum(tr.dataset.basic);
-        var lateMinutes = toNum(tr.dataset.lateMinutes);
-        var deductionsTotal = toNum(tr.dataset.deductionsTotal);
-        var multiplier = toNum(tr.dataset.multiplier) || 1;
-
-        var absenceDays = Math.max(0, val(tr, 'absenceDays'));
-        var annualLeaveDays = Math.max(0, val(tr, 'annualLeaveDays'));
-        var unpaidLeaveDays = Math.max(0, val(tr, 'unpaidLeaveDays'));
-        var overtimeHours = Math.max(0, val(tr, 'overtimeHours'));
-        var bonuses = Math.max(0, val(tr, 'bonuses'));
-        var allowances = Math.max(0, val(tr, 'allowances'));
-        var extraDays = Math.max(0, val(tr, 'extraDays'));
-        var extraDaysRate = field(tr, 'extraDaysRate') && field(tr, 'extraDaysRate').value !== ''
-            ? Math.max(0, val(tr, 'extraDaysRate')) : dailyRate;
-        var advances = Math.max(0, val(tr, 'advances'));
-        var otherDeductions = Math.max(0, val(tr, 'otherDeductions'));
-
-        var lateDeduction = round2(lateMinutes * minuteRate);
-        var paidHours = round2(round2(overtimeHours * 60) / 60);
-        var overtimeAmount = round2(paidHours * hourlyRate * multiplier);
-        var absenceDeduction = round2(absenceDays * dailyRate);
-        var unpaidLeaveDeduction = round2(unpaidLeaveDays * dailyRate);
-        var extraDaysAmount = round2(extraDays * extraDaysRate);
-
-        var gross = round2(basic + overtimeAmount + bonuses + allowances + extraDaysAmount);
-        var deductions = round2(lateDeduction + absenceDeduction + unpaidLeaveDeduction + advances + deductionsTotal + otherDeductions);
-        var net = Math.max(0, round2(gross - deductions));
-
-        setCell(tr, 'overtimeAmount', money(overtimeAmount));
-        setCell(tr, 'additionalDaysAmount', money(extraDaysAmount));
-        setCell(tr, 'grossEarnings', money(gross));
-        setCell(tr, 'totalDeductions', money(deductions));
-        setCell(tr, 'netSalary', money(net));
-
-        return {
-            annualLeaveDays: annualLeaveDays,
-            overtimeAmount: overtimeAmount,
-            gross: gross,
-            deductions: deductions,
-            net: net
-        };
+        function saved(name) { var c = cell(tr, name); return c ? toNum(c.textContent) : 0; }
+        return { annualLeaveDays: val(tr, 'annualLeaveDays'), overtimeAmount: saved('overtimeAmount'),
+            gross: saved('grossEarnings'), deductions: saved('totalDeductions'), net: saved('netSalary') };
     }
-
     function refreshTotals() {
         var t = { annualLeave: 0, overtime: 0, gross: 0, deductions: 0, net: 0 };
         table.querySelectorAll('tbody tr.sheet-row').forEach(function (tr) {
@@ -137,11 +105,13 @@
         var n = dirtyRows.size;
         if (dirtyIndicator) dirtyIndicator.hidden = n === 0;
         if (dirtyCount) dirtyCount.textContent = n;
-        if (saveBtn) saveBtn.disabled = n === 0;
-        if (discardBtn) discardBtn.disabled = n === 0;
+        if (saveBtn) saveBtn.disabled = saving || n === 0;
+        if (discardBtn) discardBtn.disabled = saving || n === 0;
     }
 
     function markDirty(tr) {
+        var id = parseInt(tr.dataset.itemId, 10);
+        revisions.set(id, (revisions.get(id) || 0) + 1);
         dirtyRows.add(parseInt(tr.dataset.itemId, 10));
         tr.classList.add('row-dirty');
         updateDirtyUi();
@@ -223,14 +193,23 @@
     }
 
     function save(allowOverdraft) {
-        if (!canEdit || dirtyRows.size === 0) return;
+        if (!canEdit || saving || dirtyRows.size === 0) return;
+        var invalid = Array.from(table.querySelectorAll('input.cell-input')).find(function (input) { return !input.checkValidity(); });
+        if (invalid) { invalid.reportValidity(); showToast('أدخل قيماً صحيحة قبل الحفظ.', 'bad'); return; }
         var ids = Array.from(dirtyRows);
+        var sentRevisions = new Map(revisions);
+        var retryConfirmed = false;
+        saving = true;
+        updateDirtyUi();
+        var controller = new AbortController();
+        var timeout = setTimeout(function () { controller.abort(); }, 60000);
         var payload = { runId: runId, allowOverdraft: !!allowOverdraft, rows: collectRows(ids) };
 
         if (saveBtn) { saveBtn.disabled = true; saveBtn.dataset.text = saveBtn.textContent; saveBtn.textContent = '…جارٍ الحفظ'; }
 
         fetch(saveUrl, {
             method: 'POST',
+            signal: controller.signal,
             headers: {
                 'Content-Type': 'application/json',
                 'RequestVerificationToken': antiforgeryToken(),
@@ -241,8 +220,8 @@
             return res.json().then(function (data) { return { ok: res.ok, data: data }; });
         }).then(function (out) {
             var data = out.data || {};
-            if (!out.ok && data.error) {
-                showToast('تعذّر الحفظ: ' + data.error, 'bad');
+            if (!out.ok || !Array.isArray(data.rows)) {
+                showToast('تعذّر الحفظ: ' + (data.error || 'استجابة غير صالحة من الخادم. أعد المحاولة.'), 'bad');
                 return;
             }
 
@@ -250,7 +229,7 @@
             (data.rows || []).forEach(function (r) {
                 var tr = table.querySelector('tr[data-item-id="' + r.payrollItemId + '"]');
                 if (!tr) return;
-                if (r.saved) {
+                if (r.saved && revisions.get(r.payrollItemId) === sentRevisions.get(r.payrollItemId)) {
                     applyResult(tr, r);
                     dirtyRows.delete(r.payrollItemId);
                     tr.classList.remove('row-dirty');
@@ -268,7 +247,7 @@
             if (needsConfirm.length > 0) {
                 var msg = needsConfirm.map(function (r) { return r.employeeName + ': ' + r.error; }).join('\n');
                 if (window.confirm('تحذير قبل الاعتماد:\n\n' + msg + '\n\nهل تريد المتابعة وتجاوز الرصيد المتاح؟')) {
-                    save(true);
+                    retryConfirmed = true;
                     return;
                 }
                 showToast('لم يُحفظ تجاوز الرصيد. عدّل الأيام ثم احفظ.', 'warn');
@@ -281,10 +260,14 @@
         }).catch(function (err) {
             showToast('تعذّر الاتصال بالخادم: ' + err.message, 'bad');
         }).finally(function () {
+            clearTimeout(timeout);
+            saving = false;
+            updateDirtyUi();
             if (saveBtn) {
                 saveBtn.disabled = dirtyRows.size === 0;
                 saveBtn.textContent = saveBtn.dataset.text || '💾 حفظ التعديلات';
             }
+            if (retryConfirmed) save(true);
         });
     }
 
@@ -302,7 +285,7 @@
             clearTimeout(autoSaveTimer);
             var id = tr.dataset.itemId;
             autoSaveTimer = setTimeout(function () {
-                dirtyRows = new Set([parseInt(id, 10)]);
+                // Save every dirty row; never discard another employee's pending edits.
                 save(false);
             }, 900);
         }
@@ -334,18 +317,25 @@
     var modal = document.getElementById('breakdownModal');
     var bdBody = document.getElementById('bdBody');
     var bdTitle = document.getElementById('bdTitle');
+    var breakdownRequest = null;
 
+    function escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
     function row(label, value) {
-        return '<div class="bd-row"><span>' + label + '</span><strong>' + value + '</strong></div>';
+        return '<div class="bd-row"><span>' + escapeHtml(label) + '</span><strong>' + escapeHtml(value) + '</strong></div>';
     }
 
     function openBreakdown(id) {
         if (!modal) return;
+        if (breakdownRequest) breakdownRequest.abort();
+        var request = new AbortController();
+        breakdownRequest = request;
+        var timeout = setTimeout(function () { request.abort(); }, 30000);
         modal.hidden = false;
-        bdBody.innerHTML = '<div class="empty"><div class="icon">⏳</div><p>جارٍ التحميل…</p></div>';
-        fetch(breakdownUrl + '?id=' + id, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function (r) { return r.json(); })
+        bdBody.innerHTML = '<div class="empty"><p class="loading-label"><span class="spinner"></span>جاري تحميل تفاصيل الراتب...</p></div>';
+        fetch(breakdownUrl + '?id=' + encodeURIComponent(id), { signal: request.signal, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(async function (response) { var data; try { data = await response.json(); } catch (_) { throw new Error('تعذر قراءة التفاصيل. تحقق من تسجيل الدخول.'); } if (!response.ok) throw new Error(data.error || 'تعذر تحميل تفاصيل الراتب.'); return data; })
             .then(function (d) {
+                if (breakdownRequest !== request || modal.hidden) return;
                 bdTitle.textContent = d.employeeName + ' — ' + (d.period || '');
                 var html = '';
                 html += '<div class="bd-section">بيانات الموظف</div>';
@@ -355,6 +345,9 @@
                 html += row('آخر تعديل يدوي', d.lastEditedBy ? (d.lastEditedBy + ' — ' + (d.lastEditedAt ? new Date(d.lastEditedAt).toLocaleString('ar-EG') : '')) : 'لا يوجد');
                 html += '<div class="bd-section">أساس الحساب</div>';
                 html += row('الراتب الأساسي', money(d.basicSalary));
+                html += row('المكتسب الأساسي حتى التاريخ', d.earnedBasicSalary == null ? 'غير متاح تاريخياً' : money(d.earnedBasicSalary));
+                html += row('المكتسب الصافي حتى التاريخ', d.earnedNetSalary == null ? 'غير متاح تاريخياً' : money(d.earnedNetSalary));
+                if (d.attendanceMissingDays > 0) html += row('أيام تحتاج استكمال الحضور', d.attendanceMissingDays);
                 html += row('الأجر اليومي', money(d.dailyRate));
                 html += row('أجر الساعة (اليوم ÷ 8)', money(d.hourlyRate));
                 html += row('معامل الإضافي', days(d.overtimeMultiplier || 1) + ' (بدون مضاعفة)');
@@ -367,7 +360,9 @@
                 html += row('الإجازة السنوية المستخدمة', days(d.annualLeaveDays));
                 html += row('رصيد الإجازة السنوية المتبقي', days(d.annualLeaveBalance));
                 html += row('إجازة بدون أجر', days(d.unpaidLeaveDays));
-                html += row('دقائق التأخير', days(d.lateMinutes));
+                html += row('ساعات التأخير', days(d.lateMinutes / 60));
+                html += row('الخروج المبكر (ساعة)', d.actualEarlyDepartureHours == null ? 'غير متاح' : days(d.actualEarlyDepartureHours));
+                html += row('العجز (ساعة)', d.actualMissingHours == null ? 'غير متاح' : days(d.actualMissingHours));
                 html += '<div class="bd-section">الإضافي والإضافات</div>';
                 html += row('إضافي من البصمة (ساعة)', days(d.rawOvertimeHours));
                 html += row('إضافي معتمد (ساعة)', days(d.approvedOvertimeHours));
@@ -378,20 +373,33 @@
                 html += row('قيمة الأيام الإضافية', money(d.additionalDaysAmount));
                 html += '<div class="bd-section">الخصومات</div>';
                 html += row('خصم التأخير', money(d.lateDeduction));
+                html += row('خصم الانصراف المبكر', d.earlyLeaveDeduction == null ? 'غير مفصل تاريخياً' : money(d.earlyLeaveDeduction));
+                html += row('نقص الوردية الشامل (بديل خصمي الوقت)', d.shortageDeduction == null ? 'غير مفصل تاريخياً' : money(d.shortageDeduction));
                 html += row('خصم الغياب', money(d.absenceDeduction));
                 html += row('خصم إجازة بدون أجر', money(d.unpaidLeaveDeduction));
-                html += row('سلف', money(d.advances));
+                html += row('إجمالي السلف والقروض', money(d.advances));
+                if (d.salaryAdvancesPaid !== null && d.salaryAdvancesPaid !== undefined) {
+                    html += row('سلف مسجلة ومدفوعة سابقاً', money(d.salaryAdvancesPaid));
+                    html += row('أقساط القروض', money(d.loanInstallments));
+                    html += row('قروض سابقة', money(d.legacyLoanDeductions));
+                    html += row('مصاريف الموظف (ضمن الخصومات الأخرى)', money(d.employeeExpenseRecoveries));
+                }
                 html += row('خصومات مسجَّلة', money(d.deductionsTotal));
                 html += row('خصومات أخرى', money(d.otherDeductions));
                 html += '<div class="bd-section">الإجماليات</div>';
                 html += row('إجمالي الاستحقاقات', money(d.grossEarnings));
                 html += row('إجمالي الخصومات', money(d.totalDeductions));
                 html += '<div class="bd-row bd-net"><span>صافي الراتب</span><strong>' + money(d.netSalary) + '</strong></div>';
-                if (d.notes) html += '<div class="bd-section">ملاحظات</div><div class="hint">' + d.notes + '</div>';
+                if (d.notes) html += '<div class="bd-section">ملاحظات</div><div class="hint">' + escapeHtml(d.notes) + '</div>';
                 bdBody.innerHTML = html;
             })
-            .catch(function () {
-                bdBody.innerHTML = '<div class="empty"><div class="icon">⚠️</div><p>تعذّر تحميل التفاصيل.</p></div>';
+            .catch(function (error) {
+                if (breakdownRequest !== request || modal.hidden) return;
+                var message = error.name === 'AbortError' ? 'انتهت مهلة تحميل التفاصيل. أغلق النافذة وأعد المحاولة.' : error.name === 'TypeError' ? 'تعذر الاتصال بالخادم. أعد المحاولة.' : error.message;
+                bdBody.innerHTML = '<div class="empty"><p class="request-error">' + escapeHtml(message) + '</p></div>';
+            }).finally(function () {
+                clearTimeout(timeout);
+                if (breakdownRequest === request) breakdownRequest = null;
             });
     }
 
@@ -401,10 +409,10 @@
     });
     if (modal) {
         modal.addEventListener('click', function (e) {
-            if (e.target === modal || e.target.id === 'bdClose') modal.hidden = true;
+            if (e.target === modal || e.target.id === 'bdClose') { modal.hidden = true; if (breakdownRequest) breakdownRequest.abort(); }
         });
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') modal.hidden = true;
+            if (e.key === 'Escape') { modal.hidden = true; if (breakdownRequest) breakdownRequest.abort(); }
         });
     }
 

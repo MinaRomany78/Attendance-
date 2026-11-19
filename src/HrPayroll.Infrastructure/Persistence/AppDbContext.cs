@@ -32,6 +32,7 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<LoanRepayment> LoanRepayments => Set<LoanRepayment>();
     public DbSet<AttendanceCorrection> AttendanceCorrections => Set<AttendanceCorrection>();
     public DbSet<AppSetting> AppSettings => Set<AppSetting>();
+    public DbSet<AttendanceDevice> AttendanceDevices => Set<AttendanceDevice>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {

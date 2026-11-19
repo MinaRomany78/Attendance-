@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.AspNetCore.Localization;
 using HrPayroll.Domain.Entities;
 using HrPayroll.Infrastructure.Import;
+using HrPayroll.Infrastructure.Devices;
 using HrPayroll.Infrastructure.Persistence;
 using HrPayroll.Infrastructure.Seed;
 using HrPayroll.Infrastructure.Services;
@@ -55,6 +56,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(AppPolicies.ManageEmployees, p => p.RequireRole(AppRoles.Admin, AppRoles.Hr));
     options.AddPolicy(AppPolicies.ManageAttendance, p => p.RequireRole(AppRoles.Admin, AppRoles.Hr));
     options.AddPolicy(AppPolicies.ManagePayroll, p => p.RequireRole(AppRoles.Admin, AppRoles.Accountant));
+    options.AddPolicy(AppPolicies.ManageSalaryAdvances, p => p.RequireRole(AppRoles.Admin, AppRoles.Hr, AppRoles.Accountant));
     options.AddPolicy(AppPolicies.EditPayrollSheet, p => p.RequireRole(AppRoles.Admin, AppRoles.Accountant));
     options.AddPolicy(AppPolicies.ManageLoans, p => p.RequireRole(AppRoles.Admin, AppRoles.Accountant));
     options.AddPolicy(AppPolicies.ViewReports, p => p.RequireRole(AppRoles.All));
@@ -62,6 +64,8 @@ builder.Services.AddAuthorization(options =>
 
 // خدمات التطبيق
 builder.Services.AddScoped<AttendanceImportService>();
+builder.Services.AddDataProtection();
+builder.Services.AddScoped<AttendanceDeviceService>();
 builder.Services.AddScoped<EmployeeImportService>();
 builder.Services.AddScoped<ShiftService>();
 builder.Services.AddScoped<LeaveService>();
@@ -136,10 +140,10 @@ using (var scope = app.Services.CreateScope())
             "ConnectionStrings:DefaultConnection فارغ. اضبطه في appsettings.json " +
             "(SQL Server محلي مع Windows Authentication). لن تُنفَّذ أي ترحيلات أو تهيئة بيانات.");
     }
-    else if (!builder.Configuration.GetValue("Database:ApplyMigrationsOnStartup", true))
+    else if (!app.Environment.IsDevelopment() || !builder.Configuration.GetValue("Database:ApplyMigrationsOnStartup", false))
     {
         logger.LogInformation(
-            "تم تخطّي الترحيلات وتهيئة البيانات عند الإقلاع (Database:ApplyMigrationsOnStartup=false). " +
+            "تم تخطّي الترحيلات وتهيئة البيانات عند الإقلاع؛ الترحيل التلقائي معطل خارج بيئة التطوير. " +
             "لتفعيلها لاحقًا: dotnet ef database update -p src/HrPayroll.Infrastructure -s src/HrPayroll.Web");
     }
     else
@@ -209,6 +213,7 @@ public static class AppPolicies
     public const string ManageEmployees = "ManageEmployees";
     public const string ManageAttendance = "ManageAttendance";
     public const string ManagePayroll = "ManagePayroll";
+    public const string ManageSalaryAdvances = "ManageSalaryAdvances";
     public const string EditPayrollSheet = "EditPayrollSheet";
     public const string ManageLoans = "ManageLoans";
     public const string ViewReports = "ViewReports";

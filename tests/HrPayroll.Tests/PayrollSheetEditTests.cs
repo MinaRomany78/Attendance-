@@ -306,7 +306,8 @@ public class PayrollSheetEditTests
         Assert.Equal(200m, row.Bonuses);
         Assert.True(row.IsManuallyAdjusted);
         Assert.Equal("tester", row.LastEditedBy);
-        Assert.Equal("مُعدَّل يدويًا", row.ReviewStatusText);
+        Assert.True(row.AttendanceMissingDays > 0);
+        Assert.Equal("يحتاج مراجعة", row.ReviewStatusText);
     }
 
     // ===== 9 و10 و11: منع التعديل غير الصحيح أو غير المصرح =====
@@ -315,6 +316,7 @@ public class PayrollSheetEditTests
     {
         var (db, ctx) = await SeedAsync();
         using var _ = db;
+        await PayrollTestAttendance.CompleteAsync(ctx, HrPayroll.Domain.Models.PayrollPeriod.ForMonth(2024, 10));
         var (run, item) = await GenerateAsync(ctx);
 
         await Payroll(ctx).ApproveAsync(run.Id, "tester", "u1");

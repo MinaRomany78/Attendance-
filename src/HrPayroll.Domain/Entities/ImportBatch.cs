@@ -22,6 +22,7 @@ public class ImportBatch : BaseEntity
     public int DuplicateRows { get; set; }
     public int InvalidRows { get; set; }
     public int UnknownEmployeeRows { get; set; }
+    public int ReviewRows { get; set; }
 
     public string? Notes { get; set; }
 

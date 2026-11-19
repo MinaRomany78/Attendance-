@@ -1,3 +1,4 @@
+using HrPayroll.Domain.Models;
 using ClosedXML.Excel;
 using HrPayroll.Domain.Entities;
 using HrPayroll.Domain.Enums;
@@ -118,34 +119,36 @@ public class ExcelExportService
         var currency = settings.TryGetValue(SettingKeys.Currency, out var c) ? c : "EGP";
 
         // نفس أعمدة جدول كشف المرتبات المعروض على الشاشة وبالترتيب نفسه.
-        AddSheet(wb, "Payroll", $"كشف المرتبات {run.Year}-{run.Month:00}", $"الإصدار {run.Version} | العملة {currency}",
+        AddSheet(wb, "Payroll", $"كشف المرتبات {PayrollPeriod.ForRun(run).Display}", $"الإصدار {run.Version} | العملة {currency}",
             new[]
             {
                 "م", "كود الموظف", "الاسم", "القسم",
                 "الراتب الأساسي", "أيام الحضور", "أيام راحة مدفوعة", "إجازة مدفوعة",
                 "الغياب من البصمة", "الغياب المعتمد", "أيام الإجازة السنوية", "رصيد الإجازة السنوية",
-                "إجمالي الرصيد السنوي", "إجازات أخرى بدون أجر", "دقائق التأخير",
+                "إجمالي الرصيد السنوي", "إجازات أخرى بدون أجر", "ساعات التأخير",
                 "ساعات الإضافي المعتمدة", "قيمة الإضافي",
                 "المكافآت", "البدلات", "أيام إضافية", "قيمة الأيام الإضافية",
-                "السلف", "خصومات أخرى",
+                "إجمالي السلف والقروض", "خصومات أخرى",
                 "خصم التأخير", "خصم الغياب", "خصم إجازة بدون أجر",
-                "إجمالي الاستحقاقات", "إجمالي الخصومات", "صافي الراتب", "حالة المراجعة"
+                "إجمالي الاستحقاقات", "إجمالي الخصومات", "صافي الدورة (متوقع للمسودة)", "حالة البيانات", "السلف المسجلة للخصم", "أقساط القروض", "قروض سابقة", "مصاريف الموظف", "الراتب التعاقدي", "أيام الأجر الأساسي", "فرق الخصومات فوق المستحق",
+                "ساعات انصراف مبكر فعلية", "خصم الانصراف المبكر", "خصم الوقت المفقود الشامل", "تاريخ المستحق المكتسب", "أساسي مكتسب", "استحقاقات مكتسبة", "خصومات من المكتسب", "صافي مكتسب", "أيام بيانات غير مكتملة", "حالة الصافي"
             },
             rows.Select((r, i) => new object?[]
             {
                 i + 1, r.EmployeeCode, r.EmployeeName, r.Department,
                 r.BasicSalary, r.AttendanceDays, r.PaidRestDays, r.PaidLeaveDays,
                 r.OriginalAbsenceDays, r.AbsenceDays, r.AnnualLeaveDays, r.AnnualLeaveBalance,
-                r.AnnualLeaveTotal, r.UnpaidLeaveDays, r.LateMinutes,
+                r.AnnualLeaveTotal, r.UnpaidLeaveDays, r.LateMinutes / 60m,
                 r.ApprovedOvertimeHours, r.OvertimeAmount,
                 r.Bonuses, r.Allowances, r.AdditionalDaysCount, r.AdditionalDaysAmount,
                 r.LoansTotal, r.OtherDeductions,
                 r.LateDeduction, r.AbsenceDeduction, r.UnpaidLeaveDeduction,
-                r.GrossEarnings, r.TotalDeductions, r.NetSalary, r.ReviewStatusText
+                r.GrossEarnings, r.TotalDeductions, r.NetSalary, r.ReviewStatusText, r.SalaryAdvancesPaid, r.LoanInstallments, r.LegacyLoanDeductions, r.EmployeeExpenseRecoveries, r.ContractBasicSalary, r.PayableBasicDays, r.UncoveredDeductions,
+                r.ActualEarlyDepartureHours, r.EarlyLeaveDeduction, r.ShortageDeduction, r.EarningsAsOf?.ToString("yyyy-MM-dd"), r.EarnedBasicSalary, r.EarnedGrossSalary, r.EarnedDeductions, r.EarnedNetSalary, r.AttendanceMissingDays, r.IsProvisional ? "متوقع — مسودة" : "نهائي"
             }),
             summary: $"عدد الموظفين: {rows.Count} | إجمالي الاستحقاقات: {rows.Sum(r => r.GrossEarnings):N2} | " +
                      $"إجمالي الخصومات: {rows.Sum(r => r.TotalDeductions):N2} | صافي الكشف: {rows.Sum(r => r.NetSalary):N2} {currency}",
-            moneyColumns: new[] { 5, 17, 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 29 },
+            moneyColumns: new[] { 5, 17, 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 29, 31, 32, 33, 34 },
             decimalColumns: new[] { 8, 9, 10, 11, 12, 13, 14, 15, 16, 20 });
     }
 
@@ -184,7 +187,7 @@ public class ExcelExportService
         ws.Cell(1, 1).Style.Font.Bold = true;
         ws.Cell(1, 1).Style.Font.FontSize = 14;
         ws.Range(1, 1, 1, 2).Merge();
-        ws.Cell(2, 1).Value = $"كشف راتب موظف — {slip.Year}-{slip.Month:00}";
+        ws.Cell(2, 1).Value = $"كشف راتب موظف — {slip.PeriodText}";
         ws.Range(2, 1, 2, 2).Merge();
         r = 4;
 
@@ -198,8 +201,18 @@ public class ExcelExportService
         Line("الراتب الأساسي", item.BasicSalary);
         Line("الأجر اليومي", item.DailyRate);
         Line("أجر الساعة", item.HourlyRate);
-        Line("عدد أيام الشهر المستخدم", item.DailyRate == 0 ? 30 : Math.Round(item.BasicSalary / item.DailyRate, 2));
-        Line("إجمالي ساعات اليوم", 8);
+        Line("الراتب التعاقدي الشهري", item.ContractBasicSalary ?? item.BasicSalary);
+        Line("عدد أيام الشهر المستخدم", item.DailyRateBasisDays);
+        Line("إجمالي ساعات اليوم", item.EffectiveWorkHoursPerDay);
+        if (item.EarningsAsOf.HasValue)
+        {
+            Section($"المستحق المثبت حتى {item.EarningsAsOf:yyyy-MM-dd}");
+            Line("أساسي مكتسب", item.EarnedBasicSalary);
+            Line("استحقاقات مكتسبة", item.EarnedGrossSalary);
+            Line("خصومات واجبة من المكتسب", item.EarnedDeductions);
+            Line("صافي مكتسب حتى التاريخ", item.EarnedNetSalary);
+            Line("أيام بيانات غير مكتملة", item.AttendanceMissingDays);
+        }
 
         Section("الحضور");
         Line("أيام الحضور", item.AttendanceDays);
@@ -208,12 +221,15 @@ public class ExcelExportService
         Line("إجازات بدون أجر", item.UnpaidLeaveDays);
         Line("أيام غياب", item.AbsenceDays);
         Line("دقائق التأخير", item.LateMinutes);
+        Line("ساعات انصراف مبكر فعلية", item.ActualEarlyDepartureHours);
+        Line("دقائق انصراف مبكر خاضعة للخصم", item.EarlyLeaveMinutes);
+        Line("ساعات الوقت المفقود الفعلية", item.ActualMissingHours);
 
         Section("الإضافي");
         Line("إضافي خام (ساعة)", item.RawOvertimeHours);
         Line("إضافي معتمد (ساعة)", item.ApprovedOvertimeHours);
         Line("إضافي مدفوع (ساعة)", item.PaidOvertimeHours);
-        Line("معامل الإضافي", 1);
+        Line("معامل الإضافي", item.OvertimeMultiplier);
         Line("قيمة الإضافي", item.OvertimeAmount);
 
         Section("الاستحقاقات");
@@ -225,15 +241,24 @@ public class ExcelExportService
 
         Section("الخصومات");
         Line("خصم تأخير", item.LateDeduction);
+        Line("خصم الانصراف المبكر", item.EarlyLeaveDeduction);
+        Line("خصم وقت مفقود شامل (دون تكرار)", item.ShortageDeduction);
         Line("خصم غياب", item.AbsenceDeduction);
         Line("خصم إجازة بدون أجر", item.UnpaidLeaveDeduction);
-        Line("سلف", item.LoansTotal);
+        Line("إجمالي السلف والقروض", item.LoansTotal);
+        if (item.SalaryAdvancesPaid.HasValue)
+        {
+            Line("منها: السلف المسجلة للخصم", item.SalaryAdvancesPaid.Value);
+            Line("منها: أقساط القروض", item.LoanInstallments ?? 0);
+            Line("منها: قروض سابقة", item.LegacyLoanDeductions ?? 0);
+            Line("مصاريف الموظف (ضمن الخصومات الأخرى)", item.EmployeeExpenseRecoveries ?? 0);
+        }
         Line("خصومات", item.DeductionsTotal);
         Line("خصومات أخرى", item.OtherDeductions);
         Line("إجمالي الخصومات", item.TotalDeductions);
 
         Section("الصافي");
-        Line($"صافي الراتب ({slip.Currency})", item.NetSalary);
+        Line($"{(item.IsProvisional ? "صافي الدورة المتوقع — مسودة" : "صافي الراتب النهائي")} ({slip.Currency})", item.NetSalary);
 
         if (slip.Notes.Count > 0)
         {
@@ -398,8 +423,12 @@ public class ExcelExportService
     /// <summary>كشف رواتب شهر الفترة (أحدث إصدار غير ملغى).</summary>
     private async Task AddPayrollSheetForPeriodAsync(XLWorkbook wb, AttendanceReportFilter f, CancellationToken ct)
     {
+        var date = f.To.Date;
         var run = await _db.PayrollRuns.AsNoTracking()
-            .Where(r => r.Year == f.To.Year && r.Month == f.To.Month && r.Status != PayrollStatus.Cancelled)
+            .Where(r => r.Status != PayrollStatus.Cancelled
+                && (r.PeriodStart.HasValue && r.PeriodEnd.HasValue
+                    ? r.PeriodStart <= date && r.PeriodEnd >= date
+                    : r.Year == date.Year && r.Month == date.Month))
             .OrderByDescending(r => r.Version)
             .FirstOrDefaultAsync(ct);
 
@@ -524,31 +553,32 @@ public class ExcelExportService
         return ToBytes(wb);
     }
 
-    /// <summary>تصدير سلف منتصف الشهر لفترة محددة.</summary>
-    public async Task<byte[]> ExportSalaryAdvancesAsync(int year, int month, CancellationToken ct = default)
+    /// <summary>تصدير سلف الموظفين لفترة محددة.</summary>
+    public async Task<byte[]> ExportSalaryAdvancesAsync(int year, int month, CancellationToken ct = default, string? department = null)
     {
         var rows = await _db.SalaryAdvances.AsNoTracking()
             .Include(a => a.Employee)
-            .Where(a => a.Year == year && a.Month == month)
+            .Where(a => a.Year == year && a.Month == month && (department == null || a.Employee!.Department == department))
             .OrderBy(a => a.Employee!.FullName).ToListAsync(ct);
         using var wb = new XLWorkbook();
-        AddSheet(wb, "Advances", $"سلف منتصف الشهر {year}-{month:00}",
+        AddSheet(wb, "Advances", $"سلف الموظفين {PayrollPeriod.ForMonth(year,month).Display}",
             $"العملة EGP | عدد السلف: {rows.Count}",
             new[]
             {
                 "كود الموظف", "الاسم", "القسم", "تاريخ الاستحقاق", "الراتب الأساسي (EGP)",
-                "أيام الحضور", "ساعات العمل", "المستحق (EGP)", "المقترح (EGP)", "المعتمد (EGP)",
-                "المدفوع (EGP)", "الحالة", "سبب التعديل", "ملاحظات"
+                "أيام الحضور", "ساعات العمل", "المستحق (EGP)", "المستحق المتبقي وقت الإعداد (EGP)", "المبلغ المعد (EGP)",
+                "الصرف النقدي التاريخي (EGP)", "الحالة", "سبب التعديل", "ملاحظات", "بداية الدورة", "نهاية الدورة", "تاريخ التسجيل", "تاريخ الصرف النقدي", "موثق الصرف", "السلفة الفعالة للخصم"
             },
             rows.Select(a => new object?[]
             {
                 a.Employee?.EmployeeCode, a.Employee?.FullName, a.Employee?.Department,
                 a.CutoffDate.Date, a.BasicSalary, a.AttendanceDays, a.WorkingHours,
-                a.EarnedAmount, a.ProposedAmount, a.ApprovedAmount, a.PaidAmount,
-                a.Status.ToString(), a.AdjustmentReason, a.Notes
+                a.EarnedAmount, a.ProposedAmount, a.PreparedAmount ?? a.ApprovedAmount, a.PaidAmount,
+                a.Status == SalaryAdvanceStatus.Registered ? "مسجلة للخصم" : a.Status == SalaryAdvanceStatus.Prepared ? "سجل إعداد سابق غير مفعل" : a.Status == SalaryAdvanceStatus.Paid ? "مصروفة" : a.Status == SalaryAdvanceStatus.Settled ? "مصروفة ومسواة" : a.Status == SalaryAdvanceStatus.Cancelled ? "ملغاة" : "سجل سابق غير مصروف", a.AdjustmentReason, a.Notes, PayrollPeriod.StoredOrLegacy(a.PeriodStart,a.PeriodEnd,a.Year,a.Month).Start, PayrollPeriod.StoredOrLegacy(a.PeriodStart,a.PeriodEnd,a.Year,a.Month).End, a.PreparedAt, a.PaidAt, a.PaidBy,
+                a.Status == SalaryAdvanceStatus.Registered ? a.RegisteredAmount : a.Status is SalaryAdvanceStatus.Paid or SalaryAdvanceStatus.Settled ? a.PaidAmount : 0m
             }),
-            summary: $"إجمالي المعتمد: {rows.Sum(a => a.ApprovedAmount):N2} EGP | إجمالي المدفوع: {rows.Sum(a => a.PaidAmount):N2} EGP",
-            dateFormatColumns: new[] { 4 }, moneyColumns: new[] { 5, 8, 9, 10, 11 });
+            summary: $"السلف المسجلة للخصم: {rows.Where(a => a.Status == SalaryAdvanceStatus.Registered).Sum(a => a.RegisteredAmount ?? 0):N2} EGP | الصرف النقدي التاريخي: {rows.Sum(a => a.PaidAmount):N2} EGP",
+            dateFormatColumns: new[] { 4,15,16,17,18 }, moneyColumns: new[] { 5, 8, 9, 10, 11 });
         return ToBytes(wb);
     }
 

@@ -52,7 +52,7 @@
         <div class="table-wrap">
             <table class="data">
                 <thead>
-                <tr><th>التاريخ</th><th>الدخول</th><th>الخروج</th><th>تأخير</th><th>إضافي معتمد</th><th>الحالة</th></tr>
+                <tr><th>التاريخ</th><th>الدخول</th><th>الخروج</th><th>تأخير فعلي (ساعة)</th><th>إضافي معتمد (ساعة)</th><th>الحالة</th></tr>
                 </thead>
                 <tbody>
                 @foreach (var a in attendances)
@@ -61,8 +61,8 @@
                         <td class="num">@a.WorkDate.ToString("yyyy-MM-dd")</td>
                         <td class="num">@(a.CheckInTime?.ToString("HH:mm") ?? "-")</td>
                         <td class="num">@(a.CheckOutTime?.ToString("HH:mm") ?? "-")</td>
-                        <td class="num">@a.LateMinutes</td>
-                        <td class="num">@a.ApprovedOvertimeMinutes</td>
+                        <td class="num">@a.ActualLateHours.ToString("0.##")</td>
+                        <td class="num">@HourDurationCalculator.DisplayHours(a.ApprovedOvertimeMinutes)</td>
                         <td><partial name="_StatusBadge" model="a.Status" /></td>
                     </tr>
                 }

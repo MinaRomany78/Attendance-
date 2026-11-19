@@ -70,6 +70,7 @@ public class PayrollRunConfiguration : IEntityTypeConfiguration<PayrollRun>
     public void Configure(EntityTypeBuilder<PayrollRun> b)
     {
         b.ToTable("PayrollRuns");
+        b.Property(x => x.FinancialEvidenceHash).HasMaxLength(64);
         b.Property(x => x.TotalNet).HasColumnType("decimal(18,2)");
         b.Property(x => x.TotalOvertime).HasColumnType("decimal(18,2)");
         b.Property(x => x.TotalDeductions).HasColumnType("decimal(18,2)");
@@ -108,6 +109,12 @@ public class PayrollItemConfiguration : IEntityTypeConfiguration<PayrollItem>
         b.Property(x => x.ManualOvertimeHours).HasColumnType("decimal(18,2)");
         b.Property(x => x.LastEditedBy).HasMaxLength(200);
         b.Property(x => x.LateDeduction).HasColumnType("decimal(18,2)");
+        b.Property(x => x.EarlyLeaveDeduction).HasColumnType("decimal(18,2)");
+        b.Property(x => x.ShortageDeduction).HasColumnType("decimal(18,2)");
+        b.Property(x => x.EarnedBasicSalary).HasColumnType("decimal(18,2)");
+        b.Property(x => x.EarnedGrossSalary).HasColumnType("decimal(18,2)");
+        b.Property(x => x.EarnedDeductions).HasColumnType("decimal(18,2)");
+        b.Property(x => x.EarnedNetSalary).HasColumnType("decimal(18,2)");
         b.Property(x => x.AbsenceDeduction).HasColumnType("decimal(18,2)");
         b.Property(x => x.UnpaidLeaveDeduction).HasColumnType("decimal(18,2)");
         b.Property(x => x.RawOvertimeHours).HasColumnType("decimal(18,2)");
@@ -115,6 +122,11 @@ public class PayrollItemConfiguration : IEntityTypeConfiguration<PayrollItem>
         b.Property(x => x.PaidOvertimeHours).HasColumnType("decimal(18,2)");
         b.Property(x => x.OvertimeMultiplier).HasColumnType("decimal(18,4)");
         b.Property(x => x.OvertimeAmount).HasColumnType("decimal(18,2)").HasColumnName("OvertimeValue");
+        b.Property(x => x.SalaryAdvancesPaid).HasColumnType("decimal(18,2)");
+        b.Property(x => x.LoanInstallments).HasColumnType("decimal(18,2)");
+        b.Property(x => x.LegacyLoanDeductions).HasColumnType("decimal(18,2)");
+        b.Property(x => x.EmployeeExpenseRecoveries).HasColumnType("decimal(18,2)");
+        b.Ignore(x => x.SystemFinancialDeductions);
         b.Property(x => x.LoansTotal).HasColumnType("decimal(18,2)");
         b.Property(x => x.DeductionsTotal).HasColumnType("decimal(18,2)");
         b.Property(x => x.OtherDeductions).HasColumnType("decimal(18,2)");
@@ -126,6 +138,10 @@ public class PayrollItemConfiguration : IEntityTypeConfiguration<PayrollItem>
         b.Property(x => x.GrossEarnings).HasColumnType("decimal(18,2)");
         b.Property(x => x.TotalDeductions).HasColumnType("decimal(18,2)");
         b.Property(x => x.GrossSalary).HasColumnType("decimal(18,2)");
+        b.Property(x => x.ContractBasicSalary).HasColumnType("decimal(18,2)");
+        b.Property(x => x.PayableBasicDays).HasColumnType("decimal(6,2)");
+        b.Property(x => x.UncoveredDeductions).HasColumnType("decimal(18,2)");
+        b.Property(x => x.FinancialReviewReason).HasMaxLength(1000);
         b.Property(x => x.NetSalary).HasColumnType("decimal(18,2)");
         // يبقى بلا نوع أعمدة صريح: SQL Server يحوّله إلى nvarchar(max) تلقائيًا،
         // بينما SQLite (المستخدم في الاختبارات) لا يقبل الصيغة nvarchar(max).
